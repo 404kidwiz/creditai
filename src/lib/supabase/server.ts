@@ -35,3 +35,6 @@ export function createClient() {
     }
   )
 }
+
+// Export singleton for convenience
+export const supabase = createClient()
