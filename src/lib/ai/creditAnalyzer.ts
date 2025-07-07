@@ -1,3 +1,4 @@
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabase } from '@/lib/supabase/client'
 
 export interface CreditReportData {
@@ -93,13 +94,25 @@ export interface ScoreFactor {
 }
 
 export class CreditAnalyzer {
-  private apiKey: string
+  private genAI: GoogleGenerativeAI
+  private model: any
 
   constructor() {
-    this.apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || ''
-    if (!this.apiKey) {
-      throw new Error('OpenAI API key not configured')
+    const apiKey = process.env.GOOGLE_AI_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_AI_API_KEY || ''
+    if (!apiKey) {
+      throw new Error('Google AI API key not configured. Please set GOOGLE_AI_API_KEY in your environment variables.')
     }
+    
+    this.genAI = new GoogleGenerativeAI(apiKey)
+    this.model = this.genAI.getGenerativeModel({ 
+      model: "gemini-1.5-pro",
+      generationConfig: {
+        temperature: 0.1,
+        topK: 1,
+        topP: 0.1,
+        maxOutputTokens: 8192,
+      },
+    })
   }
 
   /**
@@ -217,8 +230,8 @@ ${documentText}
 Extract all available information and return only valid JSON:
 `
 
-    const response = await this.callOpenAI(prompt)
-    return JSON.parse(response)
+    const response = await this.callGemini(prompt)
+    return this.parseGeminiResponse(response)
   }
 
   /**
@@ -249,8 +262,8 @@ Return a JSON array of dispute recommendations with this structure:
 Prioritize items with highest credit score impact and strongest legal basis.
 `
 
-    const response = await this.callOpenAI(prompt)
-    return JSON.parse(response)
+    const response = await this.callGemini(prompt)
+    return this.parseGeminiResponse(response)
   }
 
   /**
@@ -280,8 +293,8 @@ Return a JSON object with this structure:
 Include all major credit factors: payment history, credit utilization, length of credit history, new credit, credit mix.
 `
 
-    const response = await this.callOpenAI(prompt)
-    return JSON.parse(response)
+    const response = await this.callGemini(prompt)
+    return this.parseGeminiResponse(response)
   }
 
   /**
@@ -309,42 +322,65 @@ Write a 2-3 paragraph summary explaining:
 Make it encouraging and actionable for the user.
 `
 
-    return await this.callOpenAI(prompt)
+    return await this.callGemini(prompt)
   }
 
   /**
-   * Call OpenAI API
+   * Parse Gemini response and extract JSON
    */
-  private async callOpenAI(prompt: string): Promise<string> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert credit analyst with deep knowledge of FCRA regulations and credit reporting. Always return valid JSON when requested.'
-          },
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 4000
-      })
-    })
+  private parseGeminiResponse(response: string): any {
+    try {
+      // First try direct parsing
+      return JSON.parse(response)
+    } catch {
+      // Extract JSON from markdown code blocks
+      const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/)
+      if (codeBlockMatch) {
+        return JSON.parse(codeBlockMatch[1])
+      }
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`)
+      // Extract JSON from text
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0])
+      }
+
+      // Extract array from text
+      const arrayMatch = response.match(/\[[\s\S]*\]/)
+      if (arrayMatch) {
+        return JSON.parse(arrayMatch[0])
+      }
+
+      throw new Error('No valid JSON found in Gemini response')
     }
+  }
 
-    const data = await response.json()
-    return data.choices[0].message.content
+  /**
+   * Call Gemini AI API
+   */
+  private async callGemini(prompt: string): Promise<string> {
+    try {
+      const systemPrompt = `You are an expert credit analyst with deep knowledge of FCRA regulations and credit reporting. 
+      You have extensive experience in:
+      - Credit report analysis and interpretation
+      - FCRA (Fair Credit Reporting Act) compliance
+      - Dispute letter generation and legal strategies
+      - Credit score improvement techniques
+      - Consumer credit law and regulations
+      
+      Always return valid JSON when requested. Be precise, professional, and focus on actionable insights.`
+
+      const fullPrompt = `${systemPrompt}\n\n${prompt}`
+      
+      const result = await this.model.generateContent(fullPrompt)
+      const response = await result.response
+      const text = response.text()
+      
+      return text.trim()
+    } catch (error) {
+      console.error('Gemini AI error:', error)
+      throw new Error(`Gemini AI analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
   }
 
   /**
