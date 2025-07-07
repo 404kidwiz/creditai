@@ -1,0 +1,74 @@
+# A string used to distinguish different Supabase projects on the same host.
+project_id = "creditai"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[realtime]
+enabled = true
+ip_version = "IPv4"
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://localhost:54321"
+
+[inbucket]
+enabled = true
+port = 54324
+# Inbucket web interface
+smtp_port = 54325
+pop3_port = 54326
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[storage.image_transformation]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://creditai.com"]
+jwt_expiry = 3600
+enable_signup = true
+enable_manual_linking = false
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.external.google]
+enabled = false
+client_id = ""
+secret = ""
+redirect_uri = ""
+
+[auth.external.github]
+enabled = false
+client_id = ""
+secret = ""
+redirect_uri = ""
+
+[analytics]
+enabled = false
+port = 54327
+vector_port = 54328
+gcp_project_id = ""
+gcp_project_number = ""
+gcp_jwt_path = "supabase/gcp.json"
