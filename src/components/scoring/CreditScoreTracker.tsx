@@ -53,7 +53,7 @@ export function CreditScoreTracker() {
     if (user) {
       loadData()
     }
-  }, [user, selectedBureau])
+  }, [user, selectedBureau]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = async () => {
     if (!user) return

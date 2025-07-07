@@ -69,14 +69,24 @@ export function useAuth() {
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/reset-password?type=recovery`,
     })
-    if (error) throw error
+    
+    if (error) {
+      return { success: false, message: error.message }
+    }
+    
+    return { success: true, message: 'Reset email sent successfully' }
   }
 
   const updatePassword = async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password })
-    if (error) throw error
+    
+    if (error) {
+      return { success: false, message: error.message }
+    }
+    
+    return { success: true, message: 'Password updated successfully' }
   }
 
   return { 

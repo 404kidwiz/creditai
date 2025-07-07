@@ -5,7 +5,7 @@ import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface UploadProgressProps {
-  status: 'uploading' | 'processing' | 'complete' | 'error'
+  status: 'uploading' | 'processing' | 'analyzing' | 'complete' | 'error'
   progress: number
   message: string
   className?: string
@@ -88,7 +88,7 @@ export function UploadProgress({ status, progress, message, className }: UploadP
 }
 
 interface OCRProgressProps {
-  status: 'loading' | 'recognizing' | 'parsing' | 'complete' | 'error'
+  status: 'loading' | 'recognizing' | 'parsing' | 'analyzing' | 'complete' | 'error'
   progress: number
   message: string
   className?: string
@@ -144,6 +144,7 @@ export function OCRProgress({ status, progress, message, className }: OCRProgres
               {status === 'loading' && 'Initializing OCR...'}
               {status === 'recognizing' && 'Extracting Text...'}
               {status === 'parsing' && 'Parsing Credit Data...'}
+              {status === 'analyzing' && 'Analyzing with AI...'}
               {status === 'complete' && 'OCR Complete'}
               {status === 'error' && 'OCR Failed'}
             </p>

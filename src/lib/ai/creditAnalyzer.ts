@@ -105,7 +105,7 @@ export class CreditAnalyzer {
     
     this.genAI = new GoogleGenerativeAI(apiKey)
     this.model = this.genAI.getGenerativeModel({ 
-      model: "gemini-1.5-pro",
+      model: "gemini-1.5-flash",
       generationConfig: {
         temperature: 0.1,
         topK: 1,

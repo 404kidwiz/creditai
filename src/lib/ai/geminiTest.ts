@@ -3,7 +3,7 @@ import { creditAnalyzer } from './creditAnalyzer'
 /**
  * Test Gemini AI integration with sample credit report data
  */
-export async function testGeminiIntegration(): Promise<void> {
+export async function testGeminiIntegration(): Promise<any> {
   const sampleCreditReportText = `
 CREDIT REPORT - EQUIFAX
 

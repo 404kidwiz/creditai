@@ -24,12 +24,12 @@ export function CreditReportUpload({ onComplete, className }: CreditReportUpload
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [showCamera, setShowCamera] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<{
-    status: 'uploading' | 'processing' | 'complete' | 'error'
+    status: 'uploading' | 'processing' | 'analyzing' | 'complete' | 'error'
     progress: number
     message: string
   } | null>(null)
   const [ocrProgress, setOcrProgress] = useState<{
-    status: 'loading' | 'recognizing' | 'parsing' | 'complete' | 'error'
+    status: 'loading' | 'recognizing' | 'parsing' | 'analyzing' | 'complete' | 'error'
     progress: number
     message: string
   } | null>(null)

@@ -120,6 +120,7 @@ export function CameraCapture({ onCapture, onClose, isOpen }: CameraCaptureProps
             </div>
           ) : (
             <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={capturedImage}
                 alt="Captured credit report"

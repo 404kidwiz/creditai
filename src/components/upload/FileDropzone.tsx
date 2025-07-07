@@ -2,7 +2,7 @@
 
 import React, { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, File, Image, FileText, X } from 'lucide-react'
+import { Upload, File, Image as ImageIcon, FileText, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface FileDropzoneProps {
@@ -51,7 +51,7 @@ export function FileDropzone({
 
   const getFileIcon = (type: string) => {
     if (type.startsWith('image/')) {
-      return <Image className="w-8 h-8 text-blue-500" />
+      return <ImageIcon className="w-8 h-8 text-blue-500" />
     } else if (type === 'application/pdf') {
       return <FileText className="w-8 h-8 text-red-500" />
     }

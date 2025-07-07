@@ -29,7 +29,7 @@ export default function DisputesPage() {
       loadDisputeLetters()
       loadRecommendations()
     }
-  }, [user])
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDisputeLetters = async () => {
     if (!user) return
