@@ -1,5 +1,6 @@
 import Tesseract from 'tesseract.js'
 import { analyticsService } from '@/lib/analytics/analyticsService'
+import { creditAnalyzer, AIAnalysisResult } from '@/lib/ai/creditAnalyzer'
 
 export interface ExtractedText {
   text: string
@@ -15,10 +16,11 @@ export interface ExtractedText {
     inquiries: string[]
     publicRecords: string[]
   }
+  aiAnalysis?: AIAnalysisResult
 }
 
 export interface OCRProgress {
-  status: 'loading' | 'recognizing' | 'parsing' | 'complete' | 'error'
+  status: 'loading' | 'recognizing' | 'parsing' | 'analyzing' | 'complete' | 'error'
   progress: number
   message: string
 }
@@ -28,7 +30,9 @@ export class TextExtractor {
 
   async extractFromImage(
     imageUrl: string, 
-    onProgress?: (progress: OCRProgress) => void
+    onProgress?: (progress: OCRProgress) => void,
+    userId?: string,
+    enableAIAnalysis: boolean = true
   ): Promise<ExtractedText> {
     const startTime = Date.now()
     
@@ -121,12 +125,30 @@ export class TextExtractor {
       // Parse the extracted text for credit-specific information
       const creditData = this.parseCreditData(data.text)
       
+      let aiAnalysis: AIAnalysisResult | undefined
+
+      // Perform AI analysis if enabled and conditions are met
+      if (enableAIAnalysis && userId && data.text.length > 100 && data.confidence > 50) {
+        onProgress?.({
+          status: 'analyzing',
+          progress: 85,
+          message: 'Analyzing credit report with AI...'
+        })
+
+        try {
+          aiAnalysis = await creditAnalyzer.analyzeReport(data.text, userId)
+        } catch (error) {
+          console.error('AI analysis failed:', error)
+          // Continue without AI analysis rather than failing
+        }
+      }
+      
       const processingTime = Date.now() - startTime
       
       onProgress?.({
         status: 'complete',
         progress: 100,
-        message: `Text extraction complete! (${processingTime}ms)`
+        message: `Text extraction ${aiAnalysis ? 'and analysis ' : ''}complete! (${processingTime}ms)`
       })
 
       // Track OCR success
@@ -145,7 +167,8 @@ export class TextExtractor {
           accounts: creditData.accounts,
           inquiries: creditData.inquiries,
           publicRecords: creditData.publicRecords
-        }
+        },
+        aiAnalysis
       }
     } catch (error) {
       const processingTime = Date.now() - startTime

@@ -1,8 +1,9 @@
 import { supabase } from '@/lib/supabase/client'
 import { analyticsService } from '@/lib/analytics/analyticsService'
+import { textExtractor } from '@/lib/ocr/textExtractor'
 
 export interface UploadProgress {
-  status: 'uploading' | 'processing' | 'complete' | 'error'
+  status: 'uploading' | 'processing' | 'analyzing' | 'complete' | 'error'
   progress: number
   message: string
 }
@@ -12,6 +13,8 @@ export interface UploadResult {
   path: string
   size: number
   type: string
+  ocrResult?: any
+  documentId?: string
 }
 
 export class FileUploader {
@@ -85,7 +88,7 @@ export class FileUploader {
 
       onProgress?.({
         status: 'processing',
-        progress: 80,
+        progress: 70,
         message: 'Processing upload...'
       })
 
@@ -94,12 +97,71 @@ export class FileUploader {
         .from(this.BUCKET_NAME)
         .getPublicUrl(fileName)
 
+      // Save document to database
+      const { data: documentData, error: docError } = await supabase
+        .from('documents')
+        .insert({
+          user_id: userId,
+          document_type: this.determineDocumentType(file),
+          file_url: urlData.publicUrl,
+          file_name: file.name,
+          file_size: processedFile.size
+        })
+        .select()
+        .single()
+
+      if (docError) {
+        console.error('Error saving document:', docError)
+      }
+
+      let ocrResult: any = undefined
+
+      // Perform OCR and AI analysis for supported file types
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        onProgress?.({
+          status: 'analyzing',
+          progress: 80,
+          message: 'Analyzing document with AI...'
+        })
+
+        try {
+          ocrResult = await textExtractor.extractFromImage(
+            urlData.publicUrl,
+            (ocrProgress) => {
+              // Map OCR progress to upload progress
+              const progressValue = 80 + (ocrProgress.progress * 0.2)
+              onProgress?.({
+                status: 'analyzing',
+                progress: progressValue,
+                message: ocrProgress.message
+              })
+            },
+            userId,
+            true // Enable AI analysis
+          )
+
+          // Update document with OCR results
+          if (documentData && ocrResult) {
+            await supabase
+              .from('documents')
+              .update({
+                ocr_text: ocrResult.text,
+                ai_analysis: ocrResult.aiAnalysis
+              })
+              .eq('id', documentData.id)
+          }
+        } catch (error) {
+          console.error('OCR/AI analysis failed:', error)
+          // Continue without OCR rather than failing the upload
+        }
+      }
+
       const processingTime = Date.now() - startTime
       
       onProgress?.({
         status: 'complete',
         progress: 100,
-        message: `Upload complete! (${processingTime}ms)`
+        message: `Upload and analysis complete! (${processingTime}ms)`
       })
 
       // Track successful upload
@@ -109,7 +171,9 @@ export class FileUploader {
         url: urlData.publicUrl,
         path: fileName,
         size: processedFile.size,
-        type: processedFile.type
+        type: processedFile.type,
+        ocrResult,
+        documentId: documentData?.id
       }
     } catch (error) {
       const processingTime = Date.now() - startTime
@@ -206,6 +270,27 @@ export class FileUploader {
       .getPublicUrl(path)
 
     return data.publicUrl
+  }
+
+  /**
+   * Determine document type based on file name and type
+   */
+  private determineDocumentType(file: File): string {
+    const fileName = file.name.toLowerCase()
+    
+    if (fileName.includes('credit') && fileName.includes('report')) {
+      return 'credit_report'
+    } else if (fileName.includes('bank') || fileName.includes('statement')) {
+      return 'bank_statement'
+    } else if (fileName.includes('income') || fileName.includes('pay')) {
+      return 'income'
+    } else if (fileName.includes('id') || fileName.includes('license')) {
+      return 'identity'
+    } else if (fileName.includes('dispute') || fileName.includes('letter')) {
+      return 'dispute_letter'
+    } else {
+      return 'other'
+    }
   }
 }
 
