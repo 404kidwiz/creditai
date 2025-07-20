@@ -203,6 +203,7 @@ export function AuthForm({
               className="pl-10"
               value={formData.email}
               onChange={(e) => handleChange('email', e.target.value)}
+              autoComplete="email"
               required
             />
           </div>
@@ -221,6 +222,7 @@ export function AuthForm({
                 className="pl-10"
                 value={formData.fullName}
                 onChange={(e) => handleChange('fullName', e.target.value)}
+                autoComplete="name"
                 required
               />
             </div>
@@ -240,6 +242,7 @@ export function AuthForm({
                 className="pl-10"
                 value={formData.phone}
                 onChange={(e) => handleChange('phone', e.target.value)}
+                autoComplete="tel"
               />
             </div>
           </div>
@@ -258,6 +261,7 @@ export function AuthForm({
                 className="pl-10 pr-10"
                 value={formData.password}
                 onChange={(e) => handleChange('password', e.target.value)}
+                autoComplete={type === 'signin' ? 'current-password' : 'new-password'}
                 required
               />
               <Button
@@ -290,6 +294,7 @@ export function AuthForm({
                 className="pl-10 pr-10"
                 value={formData.confirmPassword}
                 onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                autoComplete="new-password"
                 required
               />
               <Button

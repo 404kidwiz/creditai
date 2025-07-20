@@ -1,0 +1,400 @@
+/**
+ * Creditor Standardizer
+ * 
+ * This module provides AI-powered creditor name standardization and validation
+ * for enhanced credit analysis with EOSCAR compliance.
+ */
+
+import { CreditorDatabase, CreditorStandardizationResult } from '@/lib/eoscar/creditorDatabase'
+import { EnhancedCreditAccount, EnhancedNegativeItem } from '@/types/enhanced-credit'
+
+// ===================================
+// Creditor Standardization Service
+// ===================================
+
+export class CreditorStandardizer {
+  private creditorDb: CreditorDatabase
+
+  constructor() {
+    this.creditorDb = new CreditorDatabase()
+  }
+
+  /**
+   * Standardize all creditor names in credit report data
+   */
+  async standardizeCreditReportCreditors(data: {
+    accounts: EnhancedCreditAccount[]
+    negativeItems: EnhancedNegativeItem[]
+  }): Promise<{
+    accounts: EnhancedCreditAccount[]
+    negativeItems: EnhancedNegativeItem[]
+    standardizationResults: CreditorStandardizationSummary
+  }> {
+    const results: CreditorStandardizationSummary = {
+      totalCreditors: 0,
+      standardizedCreditors: 0,
+      newCreditors: 0,
+      requiresReview: 0,
+      confidence: 0,
+      issues: []
+    }
+
+    // Standardize account creditors
+    const standardizedAccounts = await Promise.all(
+      data.accounts.map(async (account) => {
+        const standardizationResult = await this.creditorDb.standardizeCreditorName(account.creditorName)
+        results.totalCreditors++
+
+        if (standardizationResult.creditorInfo) {
+          results.standardizedCreditors++
+          
+          // Get EOSCAR codes for all bureaus
+          const bureauCodes = await this.getBureauCodes(account.creditorName)
+          
+          return {
+            ...account,
+            standardizedCreditorName: standardizationResult.standardizedName,
+            creditorCode: bureauCodes.general || undefined,
+            // Add bureau-specific codes to account metadata
+            bureauData: {
+              ...account.bureauData,
+              experianCode: bureauCodes.experian,
+              equifaxCode: bureauCodes.equifax,
+              transunionCode: bureauCodes.transunion
+            }
+          }
+        } else {
+          results.newCreditors++
+          if (standardizationResult.requiresManualReview) {
+            results.requiresReview++
+            results.issues.push(`New creditor requires review: ${account.creditorName}`)
+          }
+
+          return {
+            ...account,
+            standardizedCreditorName: standardizationResult.standardizedName
+          }
+        }
+      })
+    )
+
+    // Standardize negative item creditors
+    const standardizedNegativeItems = await Promise.all(
+      data.negativeItems.map(async (item) => {
+        const standardizationResult = await this.creditorDb.standardizeCreditorName(item.creditorName)
+        results.totalCreditors++
+
+        if (standardizationResult.creditorInfo) {
+          results.standardizedCreditors++
+          
+          return {
+            ...item,
+            standardizedCreditorName: standardizationResult.standardizedName
+          }
+        } else {
+          results.newCreditors++
+          if (standardizationResult.requiresManualReview) {
+            results.requiresReview++
+            results.issues.push(`New creditor requires review: ${item.creditorName}`)
+          }
+
+          return {
+            ...item,
+            standardizedCreditorName: standardizationResult.standardizedName
+          }
+        }
+      })
+    )
+
+    // Calculate overall confidence
+    results.confidence = results.totalCreditors > 0 
+      ? results.standardizedCreditors / results.totalCreditors 
+      : 0
+
+    return {
+      accounts: standardizedAccounts,
+      negativeItems: standardizedNegativeItems,
+      standardizationResults: results
+    }
+  }
+
+  /**
+   * Standardize individual creditor name
+   */
+  async standardizeCreditorName(creditorName: string): Promise<CreditorStandardizationResult> {
+    return await this.creditorDb.standardizeCreditorName(creditorName)
+  }
+
+  /**
+   * Get bureau-specific creditor codes
+   */
+  async getBureauCodes(creditorName: string): Promise<{
+    general?: string
+    experian?: string
+    equifax?: string
+    transunion?: string
+  }> {
+    const searchResults = await this.creditorDb.searchCreditor(creditorName)
+    
+    if (searchResults.length > 0 && searchResults[0].matchScore > 0.8) {
+      const creditor = searchResults[0].creditor
+      
+      return {
+        general: creditor.creditorCode || creditor.eoscarCode,
+        experian: creditor.bureauCodes.experian,
+        equifax: creditor.bureauCodes.equifax,
+        transunion: creditor.bureauCodes.transunion
+      }
+    }
+
+    return {}
+  }
+
+  /**
+   * Validate creditor for EOSCAR compliance
+   */
+  async validateCreditorForEOSCAR(creditorName: string): Promise<{
+    isEOSCARCompliant: boolean
+    creditorCode?: string
+    eoscarCode?: string
+    bureauCodes: {
+      experian?: string
+      equifax?: string
+      transunion?: string
+    }
+    issues: string[]
+  }> {
+    const searchResults = await this.creditorDb.searchCreditor(creditorName)
+    
+    if (searchResults.length > 0 && searchResults[0].matchScore > 0.8) {
+      const creditor = searchResults[0].creditor
+      const issues: string[] = []
+
+      if (!creditor.eoscarCompliant) {
+        issues.push('Creditor is not marked as EOSCAR compliant')
+      }
+
+      if (!creditor.creditorCode && !creditor.eoscarCode) {
+        issues.push('No creditor code available for EOSCAR formatting')
+      }
+
+      if (Object.keys(creditor.bureauCodes).length === 0) {
+        issues.push('No bureau-specific codes available')
+      }
+
+      return {
+        isEOSCARCompliant: creditor.eoscarCompliant && issues.length === 0,
+        creditorCode: creditor.creditorCode,
+        eoscarCode: creditor.eoscarCode,
+        bureauCodes: creditor.bureauCodes,
+        issues
+      }
+    }
+
+    return {
+      isEOSCARCompliant: false,
+      bureauCodes: {},
+      issues: ['Creditor not found in database']
+    }
+  }
+
+  /**
+   * Get creditor dispute address
+   */
+  async getCreditorDisputeAddress(creditorName: string): Promise<{
+    address?: string
+    phone?: string
+    email?: string
+    website?: string
+  }> {
+    const searchResults = await this.creditorDb.searchCreditor(creditorName)
+    
+    if (searchResults.length > 0 && searchResults[0].matchScore > 0.8) {
+      const creditor = searchResults[0].creditor
+      
+      return {
+        address: creditor.contactInfo.disputeAddress 
+          ? this.formatAddress(creditor.contactInfo.disputeAddress)
+          : this.formatAddress(creditor.address),
+        phone: creditor.contactInfo.disputePhone || creditor.contactInfo.phone,
+        email: creditor.contactInfo.disputeEmail || creditor.contactInfo.email,
+        website: creditor.contactInfo.website
+      }
+    }
+
+    return {}
+  }
+
+  /**
+   * Suggest creditor standardization improvements
+   */
+  async suggestStandardizationImprovements(creditorNames: string[]): Promise<{
+    suggestions: CreditorStandardizationSuggestion[]
+    summary: {
+      totalCreditors: number
+      needsStandardization: number
+      needsReview: number
+      confidence: number
+    }
+  }> {
+    const suggestions: CreditorStandardizationSuggestion[] = []
+    let needsStandardization = 0
+    let needsReview = 0
+
+    for (const creditorName of creditorNames) {
+      const result = await this.creditorDb.standardizeCreditorName(creditorName)
+      
+      if (!result.creditorInfo) {
+        needsStandardization++
+        
+        suggestions.push({
+          originalName: creditorName,
+          standardizedName: result.standardizedName,
+          confidence: result.confidence,
+          action: result.requiresManualReview ? 'manual_review' : 'auto_standardize',
+          suggestions: result.suggestions,
+          priority: result.confidence < 0.7 ? 'high' : 'medium'
+        })
+
+        if (result.requiresManualReview) {
+          needsReview++
+        }
+      }
+    }
+
+    const confidence = creditorNames.length > 0 
+      ? (creditorNames.length - needsStandardization) / creditorNames.length 
+      : 1
+
+    return {
+      suggestions,
+      summary: {
+        totalCreditors: creditorNames.length,
+        needsStandardization,
+        needsReview,
+        confidence
+      }
+    }
+  }
+
+  /**
+   * Format address for display
+   */
+  private formatAddress(address: any): string {
+    if (!address) return ''
+    
+    const parts = [
+      address.street,
+      `${address.city}, ${address.state} ${address.zipCode}`
+    ].filter(Boolean)
+    
+    return parts.join('\n')
+  }
+}
+
+// ===================================
+// Types
+// ===================================
+
+export interface CreditorStandardizationSummary {
+  totalCreditors: number
+  standardizedCreditors: number
+  newCreditors: number
+  requiresReview: number
+  confidence: number
+  issues: string[]
+}
+
+export interface CreditorStandardizationSuggestion {
+  originalName: string
+  standardizedName: string
+  confidence: number
+  action: 'auto_standardize' | 'manual_review'
+  suggestions: string[]
+  priority: 'high' | 'medium' | 'low'
+}
+
+// ===================================
+// Creditor Name Cleaning Utilities
+// ===================================
+
+export class CreditorNameCleaner {
+  /**
+   * Clean and normalize creditor name
+   */
+  static cleanCreditorName(name: string): string {
+    return name
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/[^\w\s&.-]/g, '')
+      .replace(/\b(inc|llc|corp|ltd|co|company|bank|na|fsb|federal|credit|union)\b\.?/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  /**
+   * Extract creditor variations
+   */
+  static generateCreditorVariations(name: string): string[] {
+    const variations: string[] = []
+    const cleaned = this.cleanCreditorName(name)
+    
+    variations.push(cleaned)
+    variations.push(cleaned.toUpperCase())
+    variations.push(cleaned.toLowerCase())
+    
+    // Add common abbreviations
+    const abbrevMap: { [key: string]: string } = {
+      'american': 'amer',
+      'national': 'natl',
+      'federal': 'fed',
+      'financial': 'fin',
+      'services': 'svc',
+      'corporation': 'corp',
+      'company': 'co',
+      'incorporated': 'inc',
+      'limited': 'ltd'
+    }
+
+    Object.entries(abbrevMap).forEach(([full, abbrev]) => {
+      if (cleaned.toLowerCase().includes(full)) {
+        variations.push(cleaned.replace(new RegExp(full, 'gi'), abbrev))
+      }
+      if (cleaned.toLowerCase().includes(abbrev)) {
+        variations.push(cleaned.replace(new RegExp(abbrev, 'gi'), full))
+      }
+    })
+
+    // Remove duplicates and return
+    return [...new Set(variations)]
+  }
+
+  /**
+   * Detect creditor type from name
+   */
+  static detectCreditorType(name: string): 'bank' | 'credit_union' | 'finance_company' | 'retailer' | 'collection_agency' | 'other' {
+    const lowerName = name.toLowerCase()
+
+    if (lowerName.includes('bank') || lowerName.includes('chase') || lowerName.includes('wells fargo') || lowerName.includes('citi')) {
+      return 'bank'
+    }
+
+    if (lowerName.includes('credit union') || lowerName.includes('cu ') || lowerName.includes('fcu')) {
+      return 'credit_union'
+    }
+
+    if (lowerName.includes('finance') || lowerName.includes('lending') || lowerName.includes('capital')) {
+      return 'finance_company'
+    }
+
+    if (lowerName.includes('collection') || lowerName.includes('recovery') || lowerName.includes('debt')) {
+      return 'collection_agency'
+    }
+
+    if (lowerName.includes('store') || lowerName.includes('retail') || lowerName.includes('card')) {
+      return 'retailer'
+    }
+
+    return 'other'
+  }
+}

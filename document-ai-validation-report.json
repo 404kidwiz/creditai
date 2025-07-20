@@ -1,0 +1,102 @@
+{
+  "timestamp": "2025-07-18T20:42:48.407Z",
+  "overall": {
+    "valid": false,
+    "score": 25
+  },
+  "checks": {
+    "prerequisites": {
+      "valid": true,
+      "details": [
+        {
+          "check": "gcloud_installed",
+          "valid": true,
+          "message": "Google Cloud SDK is installed",
+          "details": null
+        },
+        {
+          "check": "gcloud_auth",
+          "valid": true,
+          "message": "Authenticated as: 404kidwiz@gmail.com",
+          "details": null
+        },
+        {
+          "check": "project_set",
+          "valid": true,
+          "message": "Current project: creditai-465215",
+          "details": null
+        },
+        {
+          "check": "dependencies",
+          "valid": true,
+          "message": "All required dependencies are installed",
+          "details": null
+        }
+      ]
+    },
+    "configuration": {
+      "valid": false,
+      "details": [
+        {
+          "check": "config_file_exists",
+          "valid": false,
+          "message": "Processor configuration file not found",
+          "details": null
+        },
+        {
+          "check": "env_variables",
+          "valid": false,
+          "message": "Missing environment variable: GOOGLE_CLOUD_DOCUMENT_AI_ENABLED",
+          "details": null
+        }
+      ]
+    },
+    "processors": {
+      "valid": false,
+      "details": [
+        {
+          "check": "config_available",
+          "valid": false,
+          "message": "Processor configuration not available",
+          "details": null
+        }
+      ]
+    },
+    "connectivity": {
+      "valid": false,
+      "details": [
+        {
+          "check": "config_available",
+          "valid": false,
+          "message": "Processor configuration not available",
+          "details": null
+        }
+      ]
+    },
+    "integration": {
+      "valid": false,
+      "details": [
+        {
+          "check": "config_module",
+          "valid": true,
+          "message": "Processor configuration module exists",
+          "details": null
+        },
+        {
+          "check": "pdf_processor_integration",
+          "valid": false,
+          "message": "PDF processor needs integration update",
+          "details": null
+        }
+      ]
+    }
+  },
+  "recommendations": [
+    "Update PDF processor to use new processor configuration system",
+    "Run the processor setup script to create initial configuration",
+    "Address critical issues before using Document AI processors in production"
+  ],
+  "nextSteps": [
+    "Run: node scripts/setup-document-ai-processors.js"
+  ]
+}

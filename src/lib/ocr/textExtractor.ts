@@ -1,6 +1,6 @@
 import Tesseract from 'tesseract.js'
 import { analyticsService } from '@/lib/analytics/analyticsService'
-import { creditAnalyzer, AIAnalysisResult } from '@/lib/ai/creditAnalyzer'
+import { AIAnalysisResult } from '@/lib/ai/creditAnalyzer'
 
 export interface ExtractedText {
   text: string
@@ -17,6 +17,7 @@ export interface ExtractedText {
     publicRecords: string[]
   }
   aiAnalysis?: AIAnalysisResult
+  processingMethod?: 'google-vision' | 'google-documentai' | 'fallback' | 'basic-ocr' | 'tesseract'
 }
 
 export interface OCRProgress {
@@ -43,12 +44,10 @@ export class TextExtractor {
         message: 'Initializing OCR engine...'
       })
 
-      // Create worker
-      this.worker = await Tesseract.createWorker()
-      
-      // Load English language with optimized settings
-      await this.worker.loadLanguage('eng')
-      await this.worker.initialize('eng')
+      // Create worker with explicit language
+      this.worker = await Tesseract.createWorker('eng', 1, {
+        logger: () => {} // Disable logging for production
+      })
       
       onProgress?.({
         status: 'recognizing',
@@ -136,7 +135,30 @@ export class TextExtractor {
         })
 
         try {
-          aiAnalysis = await creditAnalyzer.analyzeReport(data.text, userId)
+          console.log('Starting AI analysis for text length:', data.text.length)
+          
+          // Use API endpoint instead of direct instantiation
+          const response = await fetch('/api/credit/analyze', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              documentText: data.text,
+              userId
+            })
+          })
+          
+          console.log('AI API response status:', response.status)
+          
+          if (response.ok) {
+            const result = await response.json()
+            console.log('AI analysis result:', result)
+            aiAnalysis = result.analysis
+          } else {
+            const errorText = await response.text()
+            console.error('AI analysis API failed:', errorText)
+          }
         } catch (error) {
           console.error('AI analysis failed:', error)
           // Continue without AI analysis rather than failing

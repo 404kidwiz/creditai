@@ -48,6 +48,7 @@ export interface AuthActions {
   resetPassword: (email: string) => Promise<AuthResult>
   updatePassword: (password: string) => Promise<AuthResult>
   updateProfile: (updates: Partial<Profile>) => Promise<AuthResult>
+  refreshProfile: () => Promise<void>
   refreshSession: () => Promise<AuthSession | null>
   enableMFA: () => Promise<MFAResult>
   disableMFA: () => Promise<AuthResult>

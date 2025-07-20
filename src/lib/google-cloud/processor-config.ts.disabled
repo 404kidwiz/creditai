@@ -1,0 +1,412 @@
+/**
+ * Document AI Processor Configuration Management
+ * Handles processor type configuration, selection, and validation
+ */
+
+export interface ProcessorConfig {
+  id: string
+  name: string
+  displayName: string
+  type: ProcessorType
+  description: string
+  useCase: string
+  state: ProcessorState
+  createTime?: string
+  priority: number
+  testResult?: ProcessorTestResult
+}
+
+export interface ProcessorTestResult {
+  success: boolean
+  textLength?: number
+  confidence?: number
+  pages?: number
+  reason?: string
+  timestamp?: string
+}
+
+export interface DocumentAIProcessorConfiguration {
+  projectId: string
+  location: string
+  processors: ProcessorConfig[]
+  primaryProcessor: string
+  fallbackOrder: string[]
+  createdAt: string
+  lastValidated?: string
+  validationResult?: ValidationResult
+}
+
+export interface ValidationResult {
+  valid: boolean
+  errors: string[]
+  warnings: string[]
+  timestamp: string
+}
+
+export type ProcessorType = 
+  | 'FORM_PARSER_PROCESSOR'
+  | 'OCR_PROCESSOR' 
+  | 'LAYOUT_PARSER_PROCESSOR'
+  | 'GENERAL_PROCESSOR'
+
+export type ProcessorState = 
+  | 'ENABLED'
+  | 'DISABLED'
+  | 'CREATING'
+  | 'DELETING'
+  | 'FAILED'
+
+export const PROCESSOR_TYPE_CONFIGS = {
+  FORM_PARSER_PROCESSOR: {
+    displayName: 'Credit Report Form Parser',
+    description: 'Processes structured credit report forms with field extraction',
+    useCase: 'Structured credit reports with clear form fields',
+    priority: 1,
+    capabilities: ['form_extraction', 'field_detection', 'table_parsing'],
+    supportedFormats: ['PDF', 'PNG', 'JPEG', 'TIFF'],
+    maxFileSize: 20 * 1024 * 1024, // 20MB
+    recommendedFor: ['equifax', 'experian', 'transunion', 'annual_credit_report']
+  },
+  OCR_PROCESSOR: {
+    displayName: 'Credit Report OCR Processor',
+    description: 'Extracts text from scanned credit report documents',
+    useCase: 'Scanned or image-based credit reports',
+    priority: 3,
+    capabilities: ['text_extraction', 'ocr', 'image_processing'],
+    supportedFormats: ['PDF', 'PNG', 'JPEG', 'TIFF', 'BMP'],
+    maxFileSize: 20 * 1024 * 1024, // 20MB
+    recommendedFor: ['scanned_documents', 'mobile_photos', 'low_quality_pdfs']
+  },
+  LAYOUT_PARSER_PROCESSOR: {
+    displayName: 'Credit Report Layout Parser',
+    description: 'Analyzes complex multi-column credit report layouts',
+    useCase: 'Complex credit reports with multiple columns and sections',
+    priority: 2,
+    capabilities: ['layout_analysis', 'section_detection', 'multi_column_parsing'],
+    supportedFormats: ['PDF', 'PNG', 'JPEG', 'TIFF'],
+    maxFileSize: 20 * 1024 * 1024, // 20MB
+    recommendedFor: ['complex_layouts', 'multi_column_reports', 'detailed_reports']
+  }
+} as const
+
+export class ProcessorConfigManager {
+  private config: DocumentAIProcessorConfiguration | null = null
+  private configPath: string
+
+  constructor(configPath?: string) {
+    this.configPath = configPath || './src/lib/google-cloud/processor-config.json'
+  }
+
+  /**
+   * Load processor configuration from file
+   */
+  async loadConfig(): Promise<DocumentAIProcessorConfiguration | null> {
+    try {
+      const fs = await import('fs')
+      
+      if (!fs.existsSync(this.configPath)) {
+        return null
+      }
+
+      const configData = fs.readFileSync(this.configPath, 'utf8')
+      this.config = JSON.parse(configData)
+      return this.config
+    } catch (error) {
+      console.error('Error loading processor configuration:', error)
+      return null
+    }
+  }
+
+  /**
+   * Save processor configuration to file
+   */
+  async saveConfig(config: DocumentAIProcessorConfiguration): Promise<boolean> {
+    try {
+      const fs = await import('fs')
+      const path = await import('path')
+      
+      // Ensure directory exists
+      const configDir = path.dirname(this.configPath)
+      if (!fs.existsSync(configDir)) {
+        fs.mkdirSync(configDir, { recursive: true })
+      }
+
+      fs.writeFileSync(this.configPath, JSON.stringify(config, null, 2))
+      this.config = config
+      return true
+    } catch (error) {
+      console.error('Error saving processor configuration:', error)
+      return false
+    }
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig(): DocumentAIProcessorConfiguration | null {
+    return this.config
+  }
+
+  /**
+   * Get processor by ID
+   */
+  getProcessor(processorId: string): ProcessorConfig | null {
+    if (!this.config) return null
+    return this.config.processors.find(p => p.id === processorId) || null
+  }
+
+  /**
+   * Get processor by type
+   */
+  getProcessorByType(type: ProcessorType): ProcessorConfig | null {
+    if (!this.config) return null
+    return this.config.processors.find(p => p.type === type) || null
+  }
+
+  /**
+   * Get primary processor
+   */
+  getPrimaryProcessor(): ProcessorConfig | null {
+    if (!this.config) return null
+    return this.config.processors.find(p => 
+      p.type === this.config!.primaryProcessor + '_PROCESSOR'
+    ) || null
+  }
+
+  /**
+   * Get processors in fallback order
+   */
+  getProcessorsInFallbackOrder(): ProcessorConfig[] {
+    if (!this.config) return []
+    
+    const orderedProcessors: ProcessorConfig[] = []
+    
+    for (const processorType of this.config.fallbackOrder) {
+      const processor = this.config.processors.find(p => 
+        p.type === processorType + '_PROCESSOR'
+      )
+      if (processor) {
+        orderedProcessors.push(processor)
+      }
+    }
+    
+    return orderedProcessors
+  }
+
+  /**
+   * Select best processor for document type
+   */
+  selectProcessorForDocument(
+    documentType?: string,
+    fileSize?: number,
+    format?: string
+  ): ProcessorConfig | null {
+    if (!this.config) return null
+
+    const availableProcessors = this.config.processors.filter(p => p.state === 'ENABLED')
+    
+    if (availableProcessors.length === 0) return null
+
+    // If specific document type is provided, find recommended processor
+    if (documentType) {
+      for (const processor of availableProcessors) {
+        const typeConfig = PROCESSOR_TYPE_CONFIGS[processor.type]
+        if (typeConfig.recommendedFor.includes(documentType)) {
+          return processor
+        }
+      }
+    }
+
+    // Check file size constraints
+    if (fileSize) {
+      const suitableProcessors = availableProcessors.filter(processor => {
+        const typeConfig = PROCESSOR_TYPE_CONFIGS[processor.type]
+        return fileSize <= typeConfig.maxFileSize
+      })
+      
+      if (suitableProcessors.length > 0) {
+        // Return processor with highest priority
+        return suitableProcessors.sort((a, b) => a.priority - b.priority)[0]
+      }
+    }
+
+    // Check format support
+    if (format) {
+      const formatProcessors = availableProcessors.filter(processor => {
+        const typeConfig = PROCESSOR_TYPE_CONFIGS[processor.type]
+        return typeConfig.supportedFormats.includes(format.toUpperCase())
+      })
+      
+      if (formatProcessors.length > 0) {
+        return formatProcessors.sort((a, b) => a.priority - b.priority)[0]
+      }
+    }
+
+    // Return primary processor as default
+    return this.getPrimaryProcessor()
+  }
+
+  /**
+   * Validate processor configuration
+   */
+  validateConfiguration(): ValidationResult {
+    const result: ValidationResult = {
+      valid: true,
+      errors: [],
+      warnings: [],
+      timestamp: new Date().toISOString()
+    }
+
+    if (!this.config) {
+      result.valid = false
+      result.errors.push('No processor configuration loaded')
+      return result
+    }
+
+    // Check if we have at least one processor
+    if (this.config.processors.length === 0) {
+      result.valid = false
+      result.errors.push('No processors configured')
+    }
+
+    // Check if primary processor exists
+    const primaryProcessor = this.getPrimaryProcessor()
+    if (!primaryProcessor) {
+      result.valid = false
+      result.errors.push(`Primary processor type ${this.config.primaryProcessor} not found`)
+    }
+
+    // Check processor states
+    const enabledProcessors = this.config.processors.filter(p => p.state === 'ENABLED')
+    if (enabledProcessors.length === 0) {
+      result.valid = false
+      result.errors.push('No enabled processors found')
+    }
+
+    // Check for failed processors
+    const failedProcessors = this.config.processors.filter(p => p.state === 'FAILED')
+    if (failedProcessors.length > 0) {
+      result.warnings.push(`${failedProcessors.length} processor(s) in failed state`)
+    }
+
+    // Check test results
+    const untestedProcessors = this.config.processors.filter(p => !p.testResult)
+    if (untestedProcessors.length > 0) {
+      result.warnings.push(`${untestedProcessors.length} processor(s) have not been tested`)
+    }
+
+    const failedTests = this.config.processors.filter(p => 
+      p.testResult && !p.testResult.success
+    )
+    if (failedTests.length > 0) {
+      result.warnings.push(`${failedTests.length} processor(s) failed testing`)
+    }
+
+    return result
+  }
+
+  /**
+   * Update processor test result
+   */
+  updateProcessorTestResult(processorId: string, testResult: ProcessorTestResult): boolean {
+    if (!this.config) return false
+
+    const processor = this.getProcessor(processorId)
+    if (!processor) return false
+
+    processor.testResult = {
+      ...testResult,
+      timestamp: new Date().toISOString()
+    }
+
+    return true
+  }
+
+  /**
+   * Get processor statistics
+   */
+  getProcessorStats(): {
+    total: number
+    enabled: number
+    disabled: number
+    failed: number
+    tested: number
+    testsPassed: number
+  } {
+    if (!this.config) {
+      return { total: 0, enabled: 0, disabled: 0, failed: 0, tested: 0, testsPassed: 0 }
+    }
+
+    const processors = this.config.processors
+    
+    return {
+      total: processors.length,
+      enabled: processors.filter(p => p.state === 'ENABLED').length,
+      disabled: processors.filter(p => p.state === 'DISABLED').length,
+      failed: processors.filter(p => p.state === 'FAILED').length,
+      tested: processors.filter(p => p.testResult).length,
+      testsPassed: processors.filter(p => p.testResult?.success).length
+    }
+  }
+
+  /**
+   * Export configuration for environment variables
+   */
+  exportForEnvironment(): Record<string, string> {
+    if (!this.config) return {}
+
+    const primaryProcessor = this.getPrimaryProcessor()
+    
+    return {
+      GOOGLE_CLOUD_PROJECT_ID: this.config.projectId,
+      GOOGLE_CLOUD_LOCATION: this.config.location,
+      GOOGLE_CLOUD_DOCUMENT_AI_PROCESSOR_ID: primaryProcessor?.id || '',
+      GOOGLE_CLOUD_DOCUMENT_AI_ENABLED: 'true',
+      GOOGLE_CLOUD_DOCUMENT_AI_PROCESSORS: JSON.stringify(
+        this.config.processors.map(p => ({
+          id: p.id,
+          type: p.type,
+          displayName: p.displayName,
+          state: p.state
+        }))
+      )
+    }
+  }
+}
+
+// Default instance
+export const processorConfigManager = new ProcessorConfigManager()
+
+// Utility functions
+export function getProcessorTypeConfig(type: ProcessorType) {
+  return PROCESSOR_TYPE_CONFIGS[type]
+}
+
+export function isProcessorTypeSupported(type: string): type is ProcessorType {
+  return type in PROCESSOR_TYPE_CONFIGS
+}
+
+export function getRecommendedProcessorType(
+  documentType: string,
+  fileSize?: number,
+  format?: string
+): ProcessorType | null {
+  // Check document type recommendations
+  for (const [type, config] of Object.entries(PROCESSOR_TYPE_CONFIGS)) {
+    if (config.recommendedFor.includes(documentType)) {
+      return type as ProcessorType
+    }
+  }
+
+  // Default recommendations based on characteristics
+  if (format && ['PNG', 'JPEG', 'BMP'].includes(format.toUpperCase())) {
+    return 'OCR_PROCESSOR'
+  }
+
+  if (fileSize && fileSize > 10 * 1024 * 1024) { // > 10MB
+    return 'LAYOUT_PARSER_PROCESSOR'
+  }
+
+  // Default to form parser for structured documents
+  return 'FORM_PARSER_PROCESSOR'
+}

@@ -50,47 +50,144 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     error: null,
   })
 
-  // Load user profile
+  // Load user profile with retry logic and fallback creation
   const loadProfile = useCallback(async (userId: string): Promise<Profile | null> => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
+    console.log('loadProfile called for userId:', userId)
+    
+    const maxRetries = 3
+    let lastError: any = null
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Profile loading attempt ${attempt}/${maxRetries}`)
+        
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
 
-      if (error) {
-        console.error('Error loading profile:', error)
+        console.log('Profile query result:', { data, error })
+
+        if (error) {
+          console.error(`Error loading profile (attempt ${attempt}):`, error)
+          lastError = error
+          
+          // If it's a network error, retry
+          if (attempt < maxRetries && (error.code === 'PGRST301' || error.code === 'PGRST302' || error.message?.includes('network'))) {
+            console.log(`Retrying profile load in ${attempt * 1000}ms...`)
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000))
+            continue
+          }
+          
+          return null
+        }
+
+        // If no profile found, try to create one
+        if (!data && attempt === maxRetries) {
+          console.log('No profile found, attempting to create one...')
+          try {
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                id: userId,
+                full_name: '',
+                phone: '',
+                subscription_tier: 'free',
+                subscription_status: 'active'
+              })
+              .select()
+              .single()
+
+            if (createError) {
+              console.error('Error creating profile:', createError)
+              return null
+            }
+
+            console.log('Profile created successfully:', newProfile)
+            return newProfile
+          } catch (createException) {
+            console.error('Exception creating profile:', createException)
+            return null
+          }
+        }
+
+        console.log('Profile loaded successfully:', data)
+        return data
+      } catch (error) {
+        console.error(`Exception loading profile (attempt ${attempt}):`, error)
+        lastError = error
+        
+        if (attempt < maxRetries) {
+          console.log(`Retrying profile load in ${attempt * 1000}ms...`)
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000))
+          continue
+        }
+        
         return null
       }
-
-      return data
-    } catch (error) {
-      console.error('Error loading profile:', error)
-      return null
     }
+    
+    console.error('All profile loading attempts failed:', lastError)
+    return null
   }, [])
 
-  // Update auth state
+  // Update auth state with non-blocking profile loading
   const updateAuthState = useCallback(async (session: AuthSession | null) => {
-    if (session?.user) {
-      const profile = await loadProfile(session.user.id)
+    console.log('updateAuthState called with session:', session?.user?.id)
+    
+    try {
+      if (session?.user) {
+        console.log('Setting initial auth state for user:', session.user.id)
+        
+        // Set initial state immediately without waiting for profile
+        setAuthState({
+          user: session.user as AuthUser,
+          profile: null,
+          session,
+          loading: false,
+          initialized: true,
+          error: null,
+        })
+        
+        // Load profile in background (non-blocking)
+        console.log('Loading profile in background for user:', session.user.id)
+        loadProfile(session.user.id)
+          .then((profile) => {
+            console.log('Profile loaded in background:', profile)
+            setAuthState(prev => ({
+              ...prev,
+              profile,
+              error: null,
+            }))
+          })
+          .catch((error) => {
+            console.error('Background profile loading failed:', error)
+            // Don't update error state for background loading failures
+            // This prevents blocking the UI for profile loading issues
+          })
+        
+        console.log('Auth state updated successfully (profile loading in background)')
+      } else {
+        console.log('No session, clearing auth state')
+        setAuthState({
+          user: null,
+          profile: null,
+          session: null,
+          loading: false,
+          initialized: true,
+          error: null,
+        })
+      }
+    } catch (error) {
+      console.error('Error in updateAuthState:', error)
       setAuthState({
-        user: session.user as AuthUser,
-        profile,
+        user: session?.user as AuthUser || null,
+        profile: null,
         session,
         loading: false,
         initialized: true,
-        error: null,
-      })
-    } else {
-      setAuthState({
-        user: null,
-        profile: null,
-        session: null,
-        loading: false,
-        initialized: true,
-        error: null,
+        error: error as any,
       })
     }
   }, [loadProfile])
@@ -101,15 +198,28 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     password: string, 
     options?: SignInOptions
   ): Promise<AuthResult> => {
+    console.log('signIn called with email:', email)
+    
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.error('Sign in timeout - taking too long')
+      setAuthState(prev => ({ ...prev, loading: false, error: { message: 'Sign in timed out' } as any }))
+    }, 30000) // 30 second timeout
+    
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
 
+      console.log('Calling supabase.auth.signInWithPassword...')
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
+      console.log('Sign in response:', { data: !!data, error })
+
       if (error) {
+        console.error('Sign in error:', error)
+        clearTimeout(timeoutId)
         setAuthState(prev => ({ ...prev, loading: false, error: error as any }))
         return {
           success: false,
@@ -118,6 +228,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         }
       }
 
+      console.log('Sign in successful, handling remember me...')
       // Handle remember me
       if (options?.remember) {
         localStorage.setItem('supabase_remember_me', 'true')
@@ -125,15 +236,22 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         localStorage.removeItem('supabase_remember_me')
       }
 
-      await updateAuthState(data.session as AuthSession)
-
+      console.log('Auth state will be updated by listener, redirecting...')
       // Redirect if specified
-      if (options?.redirectTo) {
-        router.push(options.redirectTo)
-      } else {
-        router.push(AUTH_ROUTES.DASHBOARD)
+      const redirectPath = options?.redirectTo || AUTH_ROUTES.DASHBOARD
+      console.log('Redirecting to:', redirectPath)
+      
+      try {
+        router.push(redirectPath)
+        console.log('Router.push called successfully')
+      } catch (routerError) {
+        console.error('Router error:', routerError)
+        // Fallback to window.location
+        window.location.href = redirectPath
       }
 
+      clearTimeout(timeoutId)
+      console.log('Sign in completed successfully')
       return {
         success: true,
         user: data.user as AuthUser,
@@ -141,6 +259,8 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         message: 'Signed in successfully',
       }
     } catch (error) {
+      console.error('Sign in exception:', error)
+      clearTimeout(timeoutId)
       const authError = error as any
       setAuthState(prev => ({ ...prev, loading: false, error: authError }))
       return {
@@ -149,7 +269,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
         message: authError.message || 'An error occurred during sign in',
       }
     }
-  }, [updateAuthState, router])
+  }, [router])
 
   // Sign up with email/password
   const signUp = useCallback(async (
@@ -199,6 +319,28 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     }
   }, [])
 
+  // Refresh profile manually
+  const refreshProfile = useCallback(async (): Promise<void> => {
+    if (!authState.user?.id) {
+      console.log('No user to refresh profile for')
+      return
+    }
+    
+    console.log('Manually refreshing profile for user:', authState.user.id)
+    try {
+      const profile = await loadProfile(authState.user.id)
+      console.log('Profile refreshed:', profile)
+      setAuthState(prev => ({
+        ...prev,
+        profile,
+        error: null,
+      }))
+    } catch (error) {
+      console.error('Error refreshing profile:', error)
+      // Don't update error state for manual refresh failures
+    }
+  }, [authState.user?.id, loadProfile])
+
   // Sign out
   const signOut = useCallback(async (): Promise<void> => {
     try {
@@ -214,15 +356,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       // Clear remember me
       localStorage.removeItem('supabase_remember_me')
 
-      // Update state
-      setAuthState({
-        user: null,
-        profile: null,
-        session: null,
-        loading: false,
-        initialized: true,
-        error: null,
-      })
+      // The onAuthStateChange listener will handle clearing the state.
 
       // Redirect to login
       router.push(AUTH_ROUTES.SIGN_IN)
@@ -533,19 +667,10 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        await updateAuthState(session as AuthSession)
-      } else if (event === 'SIGNED_OUT') {
-        setAuthState({
-          user: null,
-          profile: null,
-          session: null,
-          loading: false,
-          initialized: true,
-          error: null,
-        })
-      }
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      // The listener is the single source of truth for auth state.
+      // It handles initial session, sign in, sign out, and token refreshes.
+      updateAuthState(session as AuthSession | null)
     })
 
     return () => subscription.unsubscribe()
@@ -571,14 +696,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     return () => clearInterval(refreshInterval)
   }, [authState.session, refreshSession])
 
-  // Initialize auth state
-  useEffect(() => {
-    if (!initialSession) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        updateAuthState(session as AuthSession)
-      })
-    }
-  }, [initialSession, updateAuthState])
+  // The onAuthStateChange listener handles initial session loading, so this is not needed.
 
   const contextValue: AuthContextValue = {
     ...authState,
@@ -589,6 +707,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     resetPassword,
     updatePassword,
     updateProfile,
+    refreshProfile,
     refreshSession,
     enableMFA,
     disableMFA,
@@ -645,4 +764,4 @@ export function withAuth<P extends object>(
 
     return <Component {...props} />
   }
-} 
+}

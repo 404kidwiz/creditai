@@ -1,0 +1,79 @@
+# Production Service Configuration
+apiVersion: v1
+kind: Service
+metadata:
+  name: creditai-production
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/api/health"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "5"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: 3000
+    protocol: TCP
+  - name: https
+    port: 443
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: creditai
+    environment: production
+    version: blue  # This will be switched for blue-green deployments
+  sessionAffinity: None
+  externalTrafficPolicy: Cluster
+
+---
+# Internal Service for Health Checks
+apiVersion: v1
+kind: Service
+metadata:
+  name: creditai-production-internal
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+    type: internal
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: creditai
+    environment: production
+
+---
+# Headless Service for StatefulSet (if needed)
+apiVersion: v1
+kind: Service
+metadata:
+  name: creditai-production-headless
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+    type: headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  selector:
+    app: creditai
+    environment: production

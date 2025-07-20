@@ -182,6 +182,24 @@ const config: Config = {
             transform: 'rotate(360deg)',
           },
         },
+        'shimmer': {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        'pulse-slow': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
+        'scale-in': {
+          '0%': { 
+            opacity: '0',
+            transform: 'scale(0.95)'
+          },
+          '100%': { 
+            opacity: '1',
+            transform: 'scale(1)'
+          },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -196,6 +214,9 @@ const config: Config = {
         'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'ping': 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',
         'spin': 'spin 1s linear infinite',
+        'shimmer': 'shimmer 2s infinite',
+        'pulse-slow': 'pulse-slow 3s infinite',
+        'scale-in': 'scale-in 0.3s ease-out',
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

@@ -1,0 +1,200 @@
+# Docker Compose for CreditAI Application
+# Production-ready configuration with security and monitoring
+version: '3.8'
+
+services:
+  # Main Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        NODE_ENV: production
+    image: creditai:latest
+    container_name: creditai-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    env_file:
+      - .env.production
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - creditai-network
+    volumes:
+      - app-cache:/app/.next/cache
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`creditai.com`)"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: creditai-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - creditai-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: creditai-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx-cache:/var/cache/nginx
+      - certbot-certs:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - creditai-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # SSL Certificate Management
+  certbot:
+    image: certbot/certbot:latest
+    container_name: creditai-certbot
+    volumes:
+      - certbot-certs:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - creditai-network
+
+  # Application Monitoring
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: creditai-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - creditai-network
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # Log Management
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: creditai-logstash
+    restart: unless-stopped
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      LS_JAVA_OPTS: "-Xmx512m -Xms512m"
+    volumes:
+      - ./monitoring/logstash/config:/usr/share/logstash/config:ro
+      - ./monitoring/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - app-logs:/var/log/app:ro
+    networks:
+      - creditai-network
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# Networks
+networks:
+  creditai-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Volumes
+volumes:
+  app-cache:
+    driver: local
+  app-logs:
+    driver: local
+  redis-data:
+    driver: local
+  nginx-cache:
+    driver: local
+  certbot-certs:
+    driver: local
+  certbot-www:
+    driver: local

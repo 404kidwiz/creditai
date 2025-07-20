@@ -1,0 +1,164 @@
+# Docker ignore file for CreditAI
+# Optimized for security and build performance
+
+# Development files
+.env*
+!.env.example
+.env.local
+.env.development
+.env.staging
+.env.production
+
+# Node.js
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js
+.next/
+out/
+.swc/
+.vercel/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+test-results/
+coverage/
+*.test.js
+*.test.ts
+*.test.tsx
+__tests__/
+**/__tests__/
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Logs
+logs/
+*.log
+dev.log
+debug.log
+server.log
+dev-server.log
+
+# Security
+credentials/
+*.key
+*.pem
+*.p12
+*.crt
+*.der
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Cache directories
+.cache/
+.parcel-cache/
+.next/cache/
+
+# Backup files
+*.backup
+*_backup/
+*.bak
+
+# Development databases
+*.sqlite
+*.db
+
+# Monitoring
+monitoring/
+
+# Scripts (keep only essential ones)
+scripts/
+!scripts/setup-env.js
+!scripts/migrate-database.js
+
+# Test data
+test-data/
+sample-reports/
+
+# Google Cloud credentials (never include in image)
+*service-account*.json
+google-cloud-credentials.json
+gcp-*.json
+
+# Supabase local development
+supabase/.branches/
+
+# Diagnostic and validation files
+*diagnostic*.json
+*validation*.json
+test-results.json
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+azure-pipelines.yml
+.travis.yml
+.circleci/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Kubernetes
+k8s/
+kubernetes/
+*.yaml
+*.yml
+
+# Terraform
+*.tf
+*.tfstate
+*.tfplan
+.terraform/
+
+# Security scans
+.snyk
+.whitesource
+
+# Package lock files (use npm ci with package-lock.json)
+yarn.lock
+pnpm-lock.yaml
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo

@@ -45,7 +45,14 @@ export interface Database {
           score: number | null
           raw_data: any | null
           ai_analysis: any | null
+          extraction_metadata: any | null
+          validation_results: any | null
+          quality_metrics: any | null
+          provider_detected: string | null
+          confidence_score: number | null
+          processing_time_ms: number | null
           created_at: string
+          updated_at: string | null
         }
         Insert: {
           id?: string
@@ -55,7 +62,14 @@ export interface Database {
           score?: number | null
           raw_data?: any | null
           ai_analysis?: any | null
+          extraction_metadata?: any | null
+          validation_results?: any | null
+          quality_metrics?: any | null
+          provider_detected?: string | null
+          confidence_score?: number | null
+          processing_time_ms?: number | null
           created_at?: string
+          updated_at?: string | null
         }
         Update: {
           id?: string
@@ -65,7 +79,14 @@ export interface Database {
           score?: number | null
           raw_data?: any | null
           ai_analysis?: any | null
+          extraction_metadata?: any | null
+          validation_results?: any | null
+          quality_metrics?: any | null
+          provider_detected?: string | null
+          confidence_score?: number | null
+          processing_time_ms?: number | null
           created_at?: string
+          updated_at?: string | null
         }
       }
       negative_items: {
@@ -153,6 +174,8 @@ export interface Database {
           user_id: string
           document_type: DocumentType
           file_url: string
+          file_name: string
+          file_size: number | null
           ocr_text: string | null
           ai_analysis: Json | null
           created_at: string
@@ -162,6 +185,8 @@ export interface Database {
           user_id: string
           document_type: DocumentType
           file_url: string
+          file_name: string
+          file_size?: number | null
           ocr_text?: string | null
           ai_analysis?: Json | null
           created_at?: string
@@ -171,6 +196,8 @@ export interface Database {
           user_id?: string
           document_type?: DocumentType
           file_url?: string
+          file_name?: string
+          file_size?: number | null
           ocr_text?: string | null
           ai_analysis?: Json | null
           created_at?: string
@@ -293,6 +320,365 @@ export interface Database {
           updated_at?: string
         }
       }
+      creditor_database: {
+        Row: {
+          id: string
+          creditor_name: string
+          standardized_name: string
+          creditor_code: string | null
+          aliases: string[]
+          address: string | null
+          phone: string | null
+          website: string | null
+          industry: string | null
+          eoscar_code: string | null
+          bureau_codes: Json
+          usage_count: number
+          last_used: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          creditor_name: string
+          standardized_name: string
+          creditor_code?: string | null
+          aliases?: string[]
+          address?: string | null
+          phone?: string | null
+          website?: string | null
+          industry?: string | null
+          eoscar_code?: string | null
+          bureau_codes?: Json
+          usage_count?: number
+          last_used?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          creditor_name?: string
+          standardized_name?: string
+          creditor_code?: string | null
+          aliases?: string[]
+          address?: string | null
+          phone?: string | null
+          website?: string | null
+          industry?: string | null
+          eoscar_code?: string | null
+          bureau_codes?: Json
+          usage_count?: number
+          last_used?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      legal_references: {
+        Row: {
+          id: string
+          reference_type: 'fcra_section' | 'case_law' | 'regulation' | 'statute' | 'cfpb_guidance'
+          title: string
+          description: string
+          full_text: string | null
+          citation: string
+          jurisdiction: string | null
+          effective_date: string | null
+          dispute_types: string[]
+          success_rate: number | null
+          usage_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          reference_type: 'fcra_section' | 'case_law' | 'regulation' | 'statute' | 'cfpb_guidance'
+          title: string
+          description: string
+          full_text?: string | null
+          citation: string
+          jurisdiction?: string | null
+          effective_date?: string | null
+          dispute_types?: string[]
+          success_rate?: number | null
+          usage_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          reference_type?: 'fcra_section' | 'case_law' | 'regulation' | 'statute' | 'cfpb_guidance'
+          title?: string
+          description?: string
+          full_text?: string | null
+          citation?: string
+          jurisdiction?: string | null
+          effective_date?: string | null
+          dispute_types?: string[]
+          success_rate?: number | null
+          usage_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      eoscar_templates: {
+        Row: {
+          id: string
+          template_name: string
+          template_type: 'dispute_letter' | 'follow_up' | 'escalation' | 'validation_request'
+          bureau: 'experian' | 'equifax' | 'transunion' | 'all'
+          template_content: string
+          variables: string[]
+          eoscar_version: string
+          compliance_validated: boolean
+          last_validated: string | null
+          validation_notes: string | null
+          usage_count: number
+          success_rate: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          template_name: string
+          template_type: 'dispute_letter' | 'follow_up' | 'escalation' | 'validation_request'
+          bureau: 'experian' | 'equifax' | 'transunion' | 'all'
+          template_content: string
+          variables?: string[]
+          eoscar_version?: string
+          compliance_validated?: boolean
+          last_validated?: string | null
+          validation_notes?: string | null
+          usage_count?: number
+          success_rate?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          template_name?: string
+          template_type?: 'dispute_letter' | 'follow_up' | 'escalation' | 'validation_request'
+          bureau?: 'experian' | 'equifax' | 'transunion' | 'all'
+          template_content?: string
+          variables?: string[]
+          eoscar_version?: string
+          compliance_validated?: boolean
+          last_validated?: string | null
+          validation_notes?: string | null
+          usage_count?: number
+          success_rate?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      enhanced_dispute_records: {
+        Row: {
+          id: string
+          user_id: string
+          dispute_items: Json
+          submission_method: 'online_portal' | 'certified_mail' | 'email' | 'fax' | 'eoscar_electronic'
+          bureau_submissions: Json
+          tracking_info: Json
+          responses: Json
+          follow_up_actions: Json
+          status: 'draft' | 'submitted' | 'in_progress' | 'responded' | 'partially_resolved' | 'resolved' | 'escalated' | 'closed'
+          strategy: Json | null
+          legal_basis: string[]
+          success_probability: number | null
+          estimated_impact: number | null
+          coordination_plan: Json | null
+          created_at: string
+          updated_at: string
+          created_by: string | null
+          last_modified_by: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          dispute_items?: Json
+          submission_method: 'online_portal' | 'certified_mail' | 'email' | 'fax' | 'eoscar_electronic'
+          bureau_submissions?: Json
+          tracking_info?: Json
+          responses?: Json
+          follow_up_actions?: Json
+          status?: 'draft' | 'submitted' | 'in_progress' | 'responded' | 'partially_resolved' | 'resolved' | 'escalated' | 'closed'
+          strategy?: Json | null
+          legal_basis?: string[]
+          success_probability?: number | null
+          estimated_impact?: number | null
+          coordination_plan?: Json | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          last_modified_by?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          dispute_items?: Json
+          submission_method?: 'online_portal' | 'certified_mail' | 'email' | 'fax' | 'eoscar_electronic'
+          bureau_submissions?: Json
+          tracking_info?: Json
+          responses?: Json
+          follow_up_actions?: Json
+          status?: 'draft' | 'submitted' | 'in_progress' | 'responded' | 'partially_resolved' | 'resolved' | 'escalated' | 'closed'
+          strategy?: Json | null
+          legal_basis?: string[]
+          success_probability?: number | null
+          estimated_impact?: number | null
+          coordination_plan?: Json | null
+          created_at?: string
+          updated_at?: string
+          created_by?: string | null
+          last_modified_by?: string | null
+        }
+      }
+      bureau_performance: {
+        Row: {
+          id: string
+          bureau: 'experian' | 'equifax' | 'transunion'
+          dispute_id: string | null
+          response_time_days: number | null
+          resolution_time_days: number | null
+          communication_quality: number | null
+          outcome: 'deleted' | 'updated' | 'verified' | 'partial' | 'rejected' | 'pending' | null
+          submission_date: string
+          response_date: string | null
+          resolution_date: string | null
+          escalation_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          bureau: 'experian' | 'equifax' | 'transunion'
+          dispute_id?: string | null
+          response_time_days?: number | null
+          resolution_time_days?: number | null
+          communication_quality?: number | null
+          outcome?: 'deleted' | 'updated' | 'verified' | 'partial' | 'rejected' | 'pending' | null
+          submission_date: string
+          response_date?: string | null
+          resolution_date?: string | null
+          escalation_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          bureau?: 'experian' | 'equifax' | 'transunion'
+          dispute_id?: string | null
+          response_time_days?: number | null
+          resolution_time_days?: number | null
+          communication_quality?: number | null
+          outcome?: 'deleted' | 'updated' | 'verified' | 'partial' | 'rejected' | 'pending' | null
+          submission_date?: string
+          response_date?: string | null
+          resolution_date?: string | null
+          escalation_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      dispute_analytics: {
+        Row: {
+          id: string
+          user_id: string | null
+          period_start: string
+          period_end: string
+          total_disputes: number
+          successful_disputes: number
+          success_rate: number | null
+          score_improvement: number
+          negative_items_removed: number
+          accounts_updated: number
+          inquiries_removed: number
+          average_response_time: number | null
+          average_resolution_time: number | null
+          escalation_rate: number | null
+          bureau_performance: Json
+          calculated_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          period_start: string
+          period_end: string
+          total_disputes?: number
+          successful_disputes?: number
+          success_rate?: number | null
+          score_improvement?: number
+          negative_items_removed?: number
+          accounts_updated?: number
+          inquiries_removed?: number
+          average_response_time?: number | null
+          average_resolution_time?: number | null
+          escalation_rate?: number | null
+          bureau_performance?: Json
+          calculated_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          period_start?: string
+          period_end?: string
+          total_disputes?: number
+          successful_disputes?: number
+          success_rate?: number | null
+          score_improvement?: number
+          negative_items_removed?: number
+          accounts_updated?: number
+          inquiries_removed?: number
+          average_response_time?: number | null
+          average_resolution_time?: number | null
+          escalation_rate?: number | null
+          bureau_performance?: Json
+          calculated_at?: string
+          created_at?: string
+        }
+      }
+      validation_history: {
+        Row: {
+          id: string
+          credit_report_id: string | null
+          validation_type: 'extraction' | 'eoscar_compliance' | 'legal_compliance' | 'quality_assurance'
+          overall_score: number | null
+          issues: Json
+          recommendations: Json
+          validator_type: 'ai' | 'manual' | 'automated'
+          validator_version: string | null
+          validation_time_ms: number | null
+          validated_at: string
+          validated_by: string | null
+        }
+        Insert: {
+          id?: string
+          credit_report_id?: string | null
+          validation_type: 'extraction' | 'eoscar_compliance' | 'legal_compliance' | 'quality_assurance'
+          overall_score?: number | null
+          issues?: Json
+          recommendations?: Json
+          validator_type: 'ai' | 'manual' | 'automated'
+          validator_version?: string | null
+          validation_time_ms?: number | null
+          validated_at?: string
+          validated_by?: string | null
+        }
+        Update: {
+          id?: string
+          credit_report_id?: string | null
+          validation_type?: 'extraction' | 'eoscar_compliance' | 'legal_compliance' | 'quality_assurance'
+          overall_score?: number | null
+          issues?: Json
+          recommendations?: Json
+          validator_type?: 'ai' | 'manual' | 'automated'
+          validator_version?: string | null
+          validation_time_ms?: number | null
+          validated_at?: string
+          validated_by?: string | null
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -358,6 +744,15 @@ export type Dispute = Database['public']['Tables']['disputes']['Row']
 export type Document = Database['public']['Tables']['documents']['Row']
 export type UserProgress = Database['public']['Tables']['user_progress']['Row']
 
+// Enhanced table row types
+export type CreditorDatabase = Database['public']['Tables']['creditor_database']['Row']
+export type LegalReference = Database['public']['Tables']['legal_references']['Row']
+export type EOSCARTemplate = Database['public']['Tables']['eoscar_templates']['Row']
+export type EnhancedDisputeRecord = Database['public']['Tables']['enhanced_dispute_records']['Row']
+export type BureauPerformance = Database['public']['Tables']['bureau_performance']['Row']
+export type DisputeAnalytics = Database['public']['Tables']['dispute_analytics']['Row']
+export type ValidationHistory = Database['public']['Tables']['validation_history']['Row']
+
 // Insert types
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
 export type CreditReportInsert = Database['public']['Tables']['credit_reports']['Insert']
@@ -366,6 +761,15 @@ export type DisputeInsert = Database['public']['Tables']['disputes']['Insert']
 export type DocumentInsert = Database['public']['Tables']['documents']['Insert']
 export type UserProgressInsert = Database['public']['Tables']['user_progress']['Insert']
 
+// Enhanced table insert types
+export type CreditorDatabaseInsert = Database['public']['Tables']['creditor_database']['Insert']
+export type LegalReferenceInsert = Database['public']['Tables']['legal_references']['Insert']
+export type EOSCARTemplateInsert = Database['public']['Tables']['eoscar_templates']['Insert']
+export type EnhancedDisputeRecordInsert = Database['public']['Tables']['enhanced_dispute_records']['Insert']
+export type BureauPerformanceInsert = Database['public']['Tables']['bureau_performance']['Insert']
+export type DisputeAnalyticsInsert = Database['public']['Tables']['dispute_analytics']['Insert']
+export type ValidationHistoryInsert = Database['public']['Tables']['validation_history']['Insert']
+
 // Update types
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 export type CreditReportUpdate = Database['public']['Tables']['credit_reports']['Update']
@@ -373,6 +777,15 @@ export type NegativeItemUpdate = Database['public']['Tables']['negative_items'][
 export type DisputeUpdate = Database['public']['Tables']['disputes']['Update']
 export type DocumentUpdate = Database['public']['Tables']['documents']['Update']
 export type UserProgressUpdate = Database['public']['Tables']['user_progress']['Update']
+
+// Enhanced table update types
+export type CreditorDatabaseUpdate = Database['public']['Tables']['creditor_database']['Update']
+export type LegalReferenceUpdate = Database['public']['Tables']['legal_references']['Update']
+export type EOSCARTemplateUpdate = Database['public']['Tables']['eoscar_templates']['Update']
+export type EnhancedDisputeRecordUpdate = Database['public']['Tables']['enhanced_dispute_records']['Update']
+export type BureauPerformanceUpdate = Database['public']['Tables']['bureau_performance']['Update']
+export type DisputeAnalyticsUpdate = Database['public']['Tables']['dispute_analytics']['Update']
+export type ValidationHistoryUpdate = Database['public']['Tables']['validation_history']['Update']
 
 // Enum types
 export type SubscriptionTier = Database['public']['Enums']['subscription_tier']
@@ -410,10 +823,17 @@ export interface CreditAccount {
   status: string
   balance: number
   limit: number
-  paymentHistory: string[]
+  paymentHistory: PaymentHistoryEntry[]
   dateOpened: string
   dateReported: string
   isNegative: boolean
+}
+
+export interface PaymentHistoryEntry {
+  month: string // YYYY-MM format
+  status: 'current' | '30_days_late' | '60_days_late' | '90_days_late' | '120_days_late' | 'charge_off' | 'collection' | 'paid' | 'closed'
+  amount?: number
+  dateReported?: string
 }
 
 export interface CreditInquiry {

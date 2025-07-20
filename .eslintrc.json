@@ -4,6 +4,51 @@
   ],
   "rules": {
     "react/no-unescaped-entities": "off",
-    "@next/next/no-page-custom-font": "off"
+    "@next/next/no-page-custom-font": "off",
+    "no-console": "warn",
+    "no-unused-vars": ["warn", { 
+      "argsIgnorePattern": "^_",
+      "varsIgnorePattern": "^_",
+      "caughtErrorsIgnorePattern": "^_",
+      "ignoreRestSiblings": true
+    }],
+    "prefer-const": "warn",
+    "no-var": "error",
+    "eqeqeq": ["warn", "always"],
+    "curly": ["warn", "all"],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-alert": "warn",
+    "no-debugger": "error",
+    "no-unreachable": "error",
+    "no-duplicate-imports": "warn",
+    "react-hooks/rules-of-hooks": "error",
+    "react-hooks/exhaustive-deps": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**/*", "**/*.test.*", "**/*.spec.*"],
+      "rules": {
+        "no-unused-vars": "off",
+        "curly": "off",
+        "no-console": "off",
+        "no-var": "warn"
+      }
+    },
+    {
+      "files": ["scripts/**/*"],
+      "rules": {
+        "no-console": "off",
+        "no-unused-vars": "off",
+        "curly": "off"
+      }
+    }
+  ],
+  "env": {
+    "browser": true,
+    "node": true,
+    "es6": true
   }
 }

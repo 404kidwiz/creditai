@@ -1,0 +1,207 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "CreditAI System Overview",
+    "tags": ["creditai", "monitoring", "production"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Status Overview",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=\"creditai\"}",
+            "legendFormat": "System Up"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": { "text": "DOWN", "color": "red" },
+                  "1": { "text": "UP", "color": "green" }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ],
+        "yAxes": [
+          { "label": "requests/sec" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 }
+      },
+      {
+        "id": 3,
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile"
+          }
+        ],
+        "yAxes": [
+          { "label": "seconds" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status_code=~\"5..\"}[5m]) / rate(http_requests_total[5m]) * 100",
+            "legendFormat": "5xx Error Rate %"
+          },
+          {
+            "expr": "rate(http_requests_total{status_code=~\"4..\"}[5m]) / rate(http_requests_total[5m]) * 100",
+            "legendFormat": "4xx Error Rate %"
+          }
+        ],
+        "yAxes": [
+          { "label": "percent" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 }
+      },
+      {
+        "id": 5,
+        "title": "Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "system_memory_usage_bytes{type=\"heap_used\"} / 1024 / 1024",
+            "legendFormat": "Heap Used (MB)"
+          },
+          {
+            "expr": "system_memory_usage_bytes{type=\"heap_total\"} / 1024 / 1024",
+            "legendFormat": "Heap Total (MB)"
+          }
+        ],
+        "yAxes": [
+          { "label": "MB" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 }
+      },
+      {
+        "id": 6,
+        "title": "AI Model Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(ai_model_requests_total[5m])",
+            "legendFormat": "{{provider}}/{{model}}"
+          }
+        ],
+        "yAxes": [
+          { "label": "requests/sec" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 }
+      },
+      {
+        "id": 7,
+        "title": "AI Model Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(ai_model_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ],
+        "yAxes": [
+          { "label": "seconds" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 }
+      },
+      {
+        "id": 8,
+        "title": "Database Query Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(db_queries_total[5m])",
+            "legendFormat": "{{operation}} on {{table}}"
+          }
+        ],
+        "yAxes": [
+          { "label": "queries/sec" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 }
+      },
+      {
+        "id": 9,
+        "title": "Database Query Latency",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile"
+          }
+        ],
+        "yAxes": [
+          { "label": "seconds" }
+        ],
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 }
+      },
+      {
+        "id": 10,
+        "title": "Business Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(credit_reports_analyzed_total[1h])",
+            "legendFormat": "Credit Reports/hour"
+          },
+          {
+            "expr": "rate(dispute_letters_generated_total[1h])",
+            "legendFormat": "Dispute Letters/hour"
+          },
+          {
+            "expr": "rate(user_registrations_total[1h])",
+            "legendFormat": "Registrations/hour"
+          }
+        ],
+        "yAxes": [
+          { "label": "events/hour" }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 36 }
+      },
+      {
+        "id": 11,
+        "title": "Active Alerts",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "ALERTS{alertstate=\"firing\"}",
+            "format": "table"
+          }
+        ],
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "10s"
+  }
+}

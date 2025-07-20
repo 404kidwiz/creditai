@@ -72,6 +72,9 @@ jspm_packages/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Google Cloud Service Account Key
+google-cloud-key.json
 .env.*.local
 
 # Vercel
@@ -236,4 +239,4 @@ temp/
 /bazel-out
 
 # profiling files
-chrome-profiler-events*.json
+chrome-profiler-events*.jsongoogle-cloud-key.json

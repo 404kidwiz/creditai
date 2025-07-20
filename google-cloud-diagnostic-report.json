@@ -1,0 +1,36 @@
+{
+  "timestamp": "2025-07-18T20:15:44.201Z",
+  "summary": {
+    "criticalIssues": 1,
+    "warnings": 4
+  },
+  "issues": [
+    {
+      "category": "APIs",
+      "issue": "Missing APIs: documentai.googleapis.com, vision.googleapis.com, storage.googleapis.com, monitoring.googleapis.com, logging.googleapis.com",
+      "recommendation": "Enable APIs: gcloud services enable documentai.googleapis.com vision.googleapis.com storage.googleapis.com monitoring.googleapis.com logging.googleapis.com"
+    }
+  ],
+  "warnings": [
+    {
+      "category": "Quotas",
+      "issue": "Default quotas are in effect",
+      "recommendation": "Monitor usage and request quota increases if needed in Google Cloud Console"
+    },
+    {
+      "category": "Permissions",
+      "issue": "Detailed permission check not performed",
+      "recommendation": "Verify you have Editor role or specific service roles for Document AI and Vision API"
+    },
+    {
+      "category": "Configuration",
+      "issue": "Optional file google-cloud-config.json is missing",
+      "recommendation": "Consider creating Google Cloud project configuration file: google-cloud-config.json"
+    },
+    {
+      "category": "Environment",
+      "issue": "Optional environment variable GOOGLE_APPLICATION_CREDENTIALS is not configured",
+      "recommendation": "Consider adding GOOGLE_APPLICATION_CREDENTIALS to .env.local file"
+    }
+  ]
+}

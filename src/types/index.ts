@@ -181,6 +181,13 @@ export interface PaymentHistory {
   amount: number
 }
 
+export interface PaymentHistoryEntry {
+  month: string // YYYY-MM format
+  status: 'current' | '30_days_late' | '60_days_late' | '90_days_late' | '120_days_late' | 'charge_off' | 'collection' | 'paid' | 'closed'
+  amount?: number
+  dateReported?: string
+}
+
 export interface CreditInquiry {
   id: string
   creditorName: string

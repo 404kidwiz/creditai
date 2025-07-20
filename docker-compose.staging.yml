@@ -1,0 +1,212 @@
+# Docker Compose for CreditAI Staging Environment
+# Production-like environment for testing before deployment
+version: '3.8'
+
+services:
+  # Staging Next.js Application
+  app-staging:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+      args:
+        NODE_ENV: production
+    image: creditai:staging
+    container_name: creditai-staging
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=staging
+      - NEXT_TELEMETRY_DISABLED=1
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+    env_file:
+      - .env.staging
+    depends_on:
+      redis-staging:
+        condition: service_healthy
+    networks:
+      - creditai-staging-network
+    volumes:
+      - staging-app-cache:/app/.next/cache
+      - staging-app-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 768M
+        reservations:
+          cpus: '0.4'
+          memory: 384M
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Staging Redis
+  redis-staging:
+    image: redis:7.2-alpine
+    container_name: creditai-redis-staging
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-staging-data:/data
+    networks:
+      - creditai-staging-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Staging Nginx
+  nginx-staging:
+    image: nginx:1.25-alpine
+    container_name: creditai-nginx-staging
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "8443:443"
+    volumes:
+      - ./nginx/staging.conf:/etc/nginx/nginx.conf:ro
+      - staging-nginx-cache:/var/cache/nginx
+    depends_on:
+      - app-staging
+    networks:
+      - creditai-staging-network
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 128M
+
+  # Staging Monitoring
+  prometheus-staging:
+    image: prom/prometheus:latest
+    container_name: creditai-prometheus-staging
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus/staging.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-staging-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=72h'
+      - '--web.enable-lifecycle'
+    networks:
+      - creditai-staging-network
+
+  grafana-staging:
+    image: grafana/grafana:latest
+    container_name: creditai-grafana-staging
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=staging_secure_password
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana-staging-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - creditai-staging-network
+    depends_on:
+      - prometheus-staging
+
+  # Staging Database (PostgreSQL for integration testing)
+  postgres-staging:
+    image: postgres:15-alpine
+    container_name: creditai-postgres-staging
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=creditai_staging
+      - POSTGRES_PASSWORD=staging_secure_db_password
+      - POSTGRES_DB=creditai_staging
+    volumes:
+      - postgres-staging-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - creditai-staging-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creditai_staging"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # Testing Tools
+  newman:
+    image: postman/newman:latest
+    container_name: creditai-newman-staging
+    volumes:
+      - ./tests/postman:/etc/newman
+    networks:
+      - creditai-staging-network
+    depends_on:
+      - app-staging
+    profiles:
+      - testing
+    entrypoint: >
+      /bin/sh -c "
+        echo 'Waiting for app to be ready...'
+        sleep 30
+        newman run /etc/newman/creditai-api-tests.json
+        --environment /etc/newman/staging-environment.json
+        --reporters cli,htmlextra
+        --reporter-htmlextra-export /etc/newman/results/staging-test-report.html
+      "
+
+# Networks
+networks:
+  creditai-staging-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+# Volumes
+volumes:
+  staging-app-cache:
+    driver: local
+  staging-app-logs:
+    driver: local
+  redis-staging-data:
+    driver: local
+  staging-nginx-cache:
+    driver: local
+  prometheus-staging-data:
+    driver: local
+  grafana-staging-data:
+    driver: local
+  postgres-staging-data:
+    driver: local

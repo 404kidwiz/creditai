@@ -1,0 +1,39 @@
+{
+  "projectId": "",
+  "location": "us-central1",
+  "features": [
+    "TEXT_DETECTION",
+    "DOCUMENT_TEXT_DETECTION",
+    "IMAGE_PROPERTIES",
+    "SAFE_SEARCH_DETECTION"
+  ],
+  "supportedFormats": [
+    "PDF",
+    "PNG",
+    "JPEG",
+    "JPG",
+    "TIFF",
+    "GIF",
+    "BMP",
+    "WEBP"
+  ],
+  "maxImageSize": 20971520,
+  "confidenceThreshold": 0.8,
+  "languageHints": [
+    "en"
+  ],
+  "fallbackEnabled": true,
+  "batchProcessing": {
+    "enabled": true,
+    "maxBatchSize": 16
+  },
+  "qualityAssessment": {
+    "enabled": true,
+    "minConfidence": 0.7
+  },
+  "safeSearch": {
+    "enabled": true,
+    "adultThreshold": "LIKELY",
+    "violenceThreshold": "LIKELY"
+  }
+}

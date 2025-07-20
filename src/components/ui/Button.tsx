@@ -2,9 +2,10 @@ import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
+import { useAccessibility } from '@/hooks/useAccessibility'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 touch-target touch-enhanced',
   {
     variants: {
       variant: {
@@ -36,15 +37,44 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  hapticFeedback?: 'light' | 'medium' | 'heavy' | 'selection' | 'impact' | 'notification'
+  announceClick?: string
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, hapticFeedback = 'medium', announceClick, onClick, ...props }, ref) => {
+    const { hapticFeedback: triggerHaptic, announce, enhanceElement } = useAccessibility()
+    const buttonRef = React.useRef<HTMLButtonElement>(null)
+    
+    // Combine refs
+    React.useImperativeHandle(ref, () => buttonRef.current!, [])
+    
+    // Auto-enhance button on mount
+    React.useEffect(() => {
+      if (buttonRef.current) {
+        enhanceElement(buttonRef.current)
+      }
+    }, [enhanceElement])
+    
+    const handleClick = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+      // Provide haptic feedback
+      triggerHaptic(hapticFeedback)
+      
+      // Announce click if specified
+      if (announceClick) {
+        announce(announceClick, 'polite')
+      }
+      
+      // Call original onClick
+      onClick?.(event)
+    }, [triggerHaptic, hapticFeedback, announce, announceClick, onClick])
+    
     const Comp = asChild ? Slot : 'button'
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref}
+        ref={buttonRef}
+        onClick={handleClick}
         {...props}
       />
     )

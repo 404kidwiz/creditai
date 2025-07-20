@@ -1,0 +1,14 @@
+# Production Namespace Configuration
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: creditai-production
+  labels:
+    name: creditai-production
+    environment: production
+    app: creditai
+    tier: production
+  annotations:
+    description: "CreditAI Production Environment"
+    contact: "ops@creditai.com"
+    cost-center: "production"

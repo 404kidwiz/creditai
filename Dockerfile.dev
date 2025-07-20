@@ -1,0 +1,53 @@
+# Development Dockerfile for CreditAI
+# Optimized for development workflow with hot reloading
+
+FROM node:18.20.4-alpine AS base
+
+# Install development tools and security updates
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+    libc6-compat \
+    curl \
+    git \
+    dumb-init && \
+    rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# Development stage
+FROM base AS development
+
+# Install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Create non-root user for development
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs && \
+    chown -R nextjs:nodejs /app
+
+# Copy source code
+COPY --chown=nextjs:nodejs . .
+
+# Set environment variables
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV CHOKIDAR_USEPOLLING=true
+
+# Create necessary directories
+RUN mkdir -p /app/.next/cache && \
+    chown -R nextjs:nodejs /app/.next
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Switch to non-root user
+USER nextjs
+
+# Expose ports
+EXPOSE 3000 9229
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["npm", "run", "dev"]

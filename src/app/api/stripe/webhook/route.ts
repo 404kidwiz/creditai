@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
 import { subscriptionManager } from '@/lib/stripe/subscriptions'
-import { supabase } from '@/lib/supabase/server'
+import { createRouteHandlerClient } from '@/lib/supabase/route'
 
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-06-30.basil'
@@ -36,27 +36,27 @@ export async function POST(request: NextRequest) {
   try {
     switch (event.type) {
       case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
+        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session, request)
         break
 
       case 'customer.subscription.created':
-        await handleSubscriptionCreated(event.data.object as Stripe.Subscription)
+        await handleSubscriptionCreated(event.data.object as Stripe.Subscription, request)
         break
 
       case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription)
+        await handleSubscriptionUpdated(event.data.object as Stripe.Subscription, request)
         break
 
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription)
+        await handleSubscriptionDeleted(event.data.object as Stripe.Subscription, request)
         break
 
       case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice)
+        await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice, request)
         break
 
       case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice)
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice, request)
         break
 
       default:
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, request: NextRequest) {
   const { userId, planId } = session.metadata || {}
   
   if (!userId || !planId) {
@@ -84,7 +84,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   console.log(`Checkout completed for user ${userId}, plan ${planId}`)
 }
 
-async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
+async function handleSubscriptionCreated(subscription: Stripe.Subscription, request: NextRequest) {
   const { userId, planId } = subscription.metadata || {}
   
   if (!userId || !planId) {
@@ -93,13 +93,15 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 
   try {
+    const supabase = createRouteHandlerClient(request)
     await subscriptionManager.createSubscription(
       userId,
       subscription.customer as string,
       subscription.id,
       planId as any,
       new Date((subscription as any).current_period_start * 1000),
-      new Date((subscription as any).current_period_end * 1000)
+      new Date((subscription as any).current_period_end * 1000),
+      supabase
     )
 
     console.log(`Subscription created for user ${userId}`)
@@ -108,7 +110,7 @@ async function handleSubscriptionCreated(subscription: Stripe.Subscription) {
   }
 }
 
-async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
+async function handleSubscriptionUpdated(subscription: Stripe.Subscription, request: NextRequest) {
   try {
     let status: any = subscription.status
     
@@ -117,11 +119,13 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
       status = 'incomplete'
     }
 
+    const supabase = createRouteHandlerClient(request)
     await subscriptionManager.updateSubscriptionStatus(
       subscription.id,
       status,
       new Date((subscription as any).current_period_start * 1000),
-      new Date((subscription as any).current_period_end * 1000)
+      new Date((subscription as any).current_period_end * 1000),
+      supabase
     )
 
     console.log(`Subscription ${subscription.id} updated with status ${status}`)
@@ -130,11 +134,15 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   }
 }
 
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription, request: NextRequest) {
   try {
+    const supabase = createRouteHandlerClient(request)
     await subscriptionManager.updateSubscriptionStatus(
       subscription.id,
-      'canceled'
+      'canceled',
+      undefined,
+      undefined,
+      supabase
     )
 
     console.log(`Subscription ${subscription.id} canceled`)
@@ -143,12 +151,14 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   }
 }
 
-async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
+async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice, request: NextRequest) {
   const subscriptionId = (invoice as any).subscription as string
   
   if (!subscriptionId) return
 
   try {
+    const supabase = createRouteHandlerClient(request)
+    
     // Log successful payment
     const { data: subscription } = await supabase
       .from('subscriptions')
@@ -177,18 +187,23 @@ async function handleInvoicePaymentSucceeded(invoice: Stripe.Invoice) {
   }
 }
 
-async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice, request: NextRequest) {
   const subscriptionId = (invoice as any).subscription as string
   
   if (!subscriptionId) return
 
   try {
+    const supabase = createRouteHandlerClient(request)
+    
     // Update subscription status to past_due
     await subscriptionManager.updateSubscriptionStatus(
       subscriptionId,
-      'past_due'
+      'past_due',
+      undefined,
+      undefined,
+      supabase
     )
-
+    
     // Log failed payment
     const { data: subscription } = await supabase
       .from('subscriptions')

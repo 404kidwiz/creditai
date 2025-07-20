@@ -1,666 +1,514 @@
-import { SupabaseClient } from './client'
-import {
-  Profile,
-  ProfileInsert,
-  ProfileUpdate,
-  CreditReport,
-  CreditReportInsert,
-  CreditReportUpdate,
-  NegativeItem,
-  NegativeItemInsert,
-  NegativeItemUpdate,
-  Dispute,
-  DisputeInsert,
-  DisputeUpdate,
-  Document,
-  DocumentInsert,
-  DocumentUpdate,
-  UserProgress,
-  UserProgressInsert,
-  UserProgressUpdate,
-  CreditReportFilters,
-  NegativeItemFilters,
-  DisputeFilters,
-  DocumentFilters,
-  DatabaseResponse,
-  PaginatedResponse,
-  CreditScoreHistory,
-  ProgressStats,
-  DisputeStats,
-} from '@/types/database'
+import { SupabaseClient } from '@supabase/supabase-js'
+import { PIIMasker } from '@/lib/security/piiMasker'
+import { DataEncryption } from '@/lib/security/encryption'
 
-// =============================================
-// PROFILE QUERIES
-// =============================================
-
-export const getProfile = async (
-  supabase: SupabaseClient,
-  userId: string
-): Promise<DatabaseResponse<Profile>> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', userId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createProfile = async (
-  supabase: SupabaseClient,
-  profile: ProfileInsert
-): Promise<DatabaseResponse<Profile>> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert(profile)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateProfile = async (
-  supabase: SupabaseClient,
-  userId: string,
-  updates: ProfileUpdate
-): Promise<DatabaseResponse<Profile>> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .update(updates)
-    .eq('id', userId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-// =============================================
-// CREDIT REPORT QUERIES
-// =============================================
-
-export const getCreditReports = async (
-  supabase: SupabaseClient,
-  userId: string,
-  filters?: CreditReportFilters
-): Promise<DatabaseResponse<CreditReport[]>> => {
-  let query = supabase
-    .from('credit_reports')
-    .select('*')
-    .eq('user_id', userId)
-    .order('report_date', { ascending: false })
-
-  if (filters?.bureau) {
-    query = query.eq('bureau', filters.bureau)
+/**
+ * Secure dashboard data retrieval with user isolation and optimized queries
+ */
+export async function getDashboardData(supabase: SupabaseClient, userId: string) {
+  if (!userId) {
+    throw new Error('User ID is required for data access')
   }
 
-  if (filters?.dateRange) {
-    query = query
-      .gte('report_date', filters.dateRange.start)
-      .lte('report_date', filters.dateRange.end)
-  }
-
-  if (filters?.scoreRange) {
-    query = query
-      .gte('score', filters.scoreRange.min)
-      .lte('score', filters.scoreRange.max)
-  }
-
-  const { data, error } = await query
-
-  return { data, error: error?.message || null }
-}
-
-export const getCreditReport = async (
-  supabase: SupabaseClient,
-  reportId: string
-): Promise<DatabaseResponse<CreditReport>> => {
-  const { data, error } = await supabase
-    .from('credit_reports')
-    .select('*')
-    .eq('id', reportId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createCreditReport = async (
-  supabase: SupabaseClient,
-  report: CreditReportInsert
-): Promise<DatabaseResponse<CreditReport>> => {
-  const { data, error } = await supabase
-    .from('credit_reports')
-    .insert(report)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateCreditReport = async (
-  supabase: SupabaseClient,
-  reportId: string,
-  updates: CreditReportUpdate
-): Promise<DatabaseResponse<CreditReport>> => {
-  const { data, error } = await supabase
-    .from('credit_reports')
-    .update(updates)
-    .eq('id', reportId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const deleteCreditReport = async (
-  supabase: SupabaseClient,
-  reportId: string
-): Promise<DatabaseResponse<null>> => {
-  const { error } = await supabase
-    .from('credit_reports')
-    .delete()
-    .eq('id', reportId)
-
-  return { data: null, error: error?.message || null }
-}
-
-// =============================================
-// NEGATIVE ITEM QUERIES
-// =============================================
-
-export const getNegativeItems = async (
-  supabase: SupabaseClient,
-  userId: string,
-  filters?: NegativeItemFilters
-): Promise<DatabaseResponse<NegativeItem[]>> => {
-  let query = supabase
-    .from('negative_items')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-
-  if (filters?.status) {
-    query = query.eq('status', filters.status)
-  }
-
-  if (filters?.creditorName) {
-    query = query.ilike('creditor_name', `%${filters.creditorName}%`)
-  }
-
-  if (filters?.impactRange) {
-    query = query
-      .gte('impact_score', filters.impactRange.min)
-      .lte('impact_score', filters.impactRange.max)
-  }
-
-  if (filters?.balanceRange) {
-    query = query
-      .gte('balance', filters.balanceRange.min)
-      .lte('balance', filters.balanceRange.max)
-  }
-
-  const { data, error } = await query
-
-  return { data, error: error?.message || null }
-}
-
-export const getNegativeItem = async (
-  supabase: SupabaseClient,
-  itemId: string
-): Promise<DatabaseResponse<NegativeItem>> => {
-  const { data, error } = await supabase
-    .from('negative_items')
-    .select('*')
-    .eq('id', itemId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createNegativeItem = async (
-  supabase: SupabaseClient,
-  item: NegativeItemInsert
-): Promise<DatabaseResponse<NegativeItem>> => {
-  const { data, error } = await supabase
-    .from('negative_items')
-    .insert(item)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateNegativeItem = async (
-  supabase: SupabaseClient,
-  itemId: string,
-  updates: NegativeItemUpdate
-): Promise<DatabaseResponse<NegativeItem>> => {
-  const { data, error } = await supabase
-    .from('negative_items')
-    .update(updates)
-    .eq('id', itemId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const deleteNegativeItem = async (
-  supabase: SupabaseClient,
-  itemId: string
-): Promise<DatabaseResponse<null>> => {
-  const { error } = await supabase
-    .from('negative_items')
-    .delete()
-    .eq('id', itemId)
-
-  return { data: null, error: error?.message || null }
-}
-
-// =============================================
-// DISPUTE QUERIES
-// =============================================
-
-export const getDisputes = async (
-  supabase: SupabaseClient,
-  userId: string,
-  filters?: DisputeFilters
-): Promise<DatabaseResponse<Dispute[]>> => {
-  let query = supabase
-    .from('disputes')
-    .select(`
-      *,
-      negative_item:negative_items(*)
-    `)
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-
-  if (filters?.status) {
-    query = query.eq('status', filters.status)
-  }
-
-  if (filters?.dateRange) {
-    query = query
-      .gte('created_at', filters.dateRange.start)
-      .lte('created_at', filters.dateRange.end)
-  }
-
-  const { data, error } = await query
-
-  return { data, error: error?.message || null }
-}
-
-export const getDispute = async (
-  supabase: SupabaseClient,
-  disputeId: string
-): Promise<DatabaseResponse<Dispute>> => {
-  const { data, error } = await supabase
-    .from('disputes')
-    .select(`
-      *,
-      negative_item:negative_items(*)
-    `)
-    .eq('id', disputeId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createDispute = async (
-  supabase: SupabaseClient,
-  dispute: DisputeInsert
-): Promise<DatabaseResponse<Dispute>> => {
-  const { data, error } = await supabase
-    .from('disputes')
-    .insert(dispute)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateDispute = async (
-  supabase: SupabaseClient,
-  disputeId: string,
-  updates: DisputeUpdate
-): Promise<DatabaseResponse<Dispute>> => {
-  const { data, error } = await supabase
-    .from('disputes')
-    .update(updates)
-    .eq('id', disputeId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const deleteDispute = async (
-  supabase: SupabaseClient,
-  disputeId: string
-): Promise<DatabaseResponse<null>> => {
-  const { error } = await supabase
-    .from('disputes')
-    .delete()
-    .eq('id', disputeId)
-
-  return { data: null, error: error?.message || null }
-}
-
-// =============================================
-// DOCUMENT QUERIES
-// =============================================
-
-export const getDocuments = async (
-  supabase: SupabaseClient,
-  userId: string,
-  filters?: DocumentFilters
-): Promise<DatabaseResponse<Document[]>> => {
-  let query = supabase
-    .from('documents')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-
-  if (filters?.documentType) {
-    query = query.eq('document_type', filters.documentType)
-  }
-
-  if (filters?.dateRange) {
-    query = query
-      .gte('created_at', filters.dateRange.start)
-      .lte('created_at', filters.dateRange.end)
-  }
-
-  if (filters?.hasOCR !== undefined) {
-    query = filters.hasOCR
-      ? query.not('ocr_text', 'is', null)
-      : query.is('ocr_text', null)
-  }
-
-  if (filters?.hasAIAnalysis !== undefined) {
-    query = filters.hasAIAnalysis
-      ? query.not('ai_analysis', 'is', null)
-      : query.is('ai_analysis', null)
-  }
-
-  const { data, error } = await query
-
-  return { data, error: error?.message || null }
-}
-
-export const getDocument = async (
-  supabase: SupabaseClient,
-  documentId: string
-): Promise<DatabaseResponse<Document>> => {
-  const { data, error } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('id', documentId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createDocument = async (
-  supabase: SupabaseClient,
-  document: DocumentInsert
-): Promise<DatabaseResponse<Document>> => {
-  const { data, error } = await supabase
-    .from('documents')
-    .insert(document)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateDocument = async (
-  supabase: SupabaseClient,
-  documentId: string,
-  updates: DocumentUpdate
-): Promise<DatabaseResponse<Document>> => {
-  const { data, error } = await supabase
-    .from('documents')
-    .update(updates)
-    .eq('id', documentId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const deleteDocument = async (
-  supabase: SupabaseClient,
-  documentId: string
-): Promise<DatabaseResponse<null>> => {
-  const { error } = await supabase
-    .from('documents')
-    .delete()
-    .eq('id', documentId)
-
-  return { data: null, error: error?.message || null }
-}
-
-// =============================================
-// USER PROGRESS QUERIES
-// =============================================
-
-export const getUserProgress = async (
-  supabase: SupabaseClient,
-  userId: string
-): Promise<DatabaseResponse<UserProgress>> => {
-  const { data, error } = await supabase
-    .from('user_progress')
-    .select('*')
-    .eq('user_id', userId)
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const createUserProgress = async (
-  supabase: SupabaseClient,
-  progress: UserProgressInsert
-): Promise<DatabaseResponse<UserProgress>> => {
-  const { data, error } = await supabase
-    .from('user_progress')
-    .insert(progress)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const updateUserProgress = async (
-  supabase: SupabaseClient,
-  userId: string,
-  updates: UserProgressUpdate
-): Promise<DatabaseResponse<UserProgress>> => {
-  const { data, error } = await supabase
-    .from('user_progress')
-    .update(updates)
-    .eq('user_id', userId)
-    .select()
-    .single()
-
-  return { data, error: error?.message || null }
-}
-
-export const addUserPoints = async (
-  supabase: SupabaseClient,
-  userId: string,
-  points: number
-): Promise<DatabaseResponse<UserProgress>> => {
-  const { data, error } = await supabase.rpc('add_user_points', {
-    user_id: userId,
-    points_to_add: points,
-  })
-
-  return { data, error: error?.message || null }
-}
-
-// =============================================
-// ANALYTICS QUERIES
-// =============================================
-
-export const getCreditScoreHistory = async (
-  supabase: SupabaseClient,
-  userId: string,
-  days: number = 365
-): Promise<DatabaseResponse<CreditScoreHistory[]>> => {
-  const { data, error } = await supabase
-    .from('credit_reports')
-    .select('report_date, score, bureau')
-    .eq('user_id', userId)
-    .gte('report_date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString())
-    .order('report_date', { ascending: true })
-
-  if (error) {
-    return { data: null, error: error.message }
-  }
-
-  const history = data?.map((report, index) => {
-    const prevReport = index > 0 ? data[index - 1] : null
-    const change = prevReport?.score !== null && report.score !== null && prevReport ? 
-      report.score - prevReport.score : 0
-    
-    return {
-      date: report.report_date,
-      score: report.score,
-      bureau: report.bureau,
-      change,
+  try {
+    // Parallel execution of optimized queries using covering indexes
+    const [reportsResult, disputesResult] = await Promise.all([
+      // Optimized query using covering index idx_credit_reports_dashboard_covering
+      supabase
+        .from('credit_reports')
+        .select(`
+          id,
+          created_at,
+          updated_at,
+          processing_method,
+          confidence_score,
+          status,
+          file_name
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+
+      // Optimized query using partial index for active disputes
+      supabase
+        .from('disputes')
+        .select(`
+          id,
+          created_at,
+          updated_at,
+          status,
+          dispute_type,
+          priority,
+          expected_resolution_date
+        `)
+        .eq('user_id', userId)
+        .in('status', ['submitted', 'in_progress', 'under_review'])
+        .order('created_at', { ascending: false })
+        .limit(10)
+    ])
+
+    if (reportsResult.error) {
+      console.error('Error fetching recent reports:', reportsResult.error)
     }
-  }) || []
 
-  return { data: history, error: null }
-}
+    if (disputesResult.error) {
+      console.error('Error fetching active disputes:', disputesResult.error)
+    }
 
-export const getProgressStats = async (
-  supabase: SupabaseClient,
-  userId: string
-): Promise<DatabaseResponse<ProgressStats>> => {
-  const { data: progress, error } = await supabase
-    .from('user_progress')
-    .select('*')
-    .eq('user_id', userId)
-    .single()
-
-  if (error) {
-    return { data: null, error: error.message }
-  }
-
-  const completedAchievements = progress.achievements.filter(
-    (achievement: any) => achievement.earned
-  ).length
-
-  const stats: ProgressStats = {
-    totalPoints: progress.points,
-    currentLevel: progress.level,
-    nextLevelPoints: progress.level * 100, // Simple level calculation
-    completedAchievements,
-    totalAchievements: progress.achievements.length,
-    streakDays: progress.streak_days,
-    recentActivity: [], // TODO: Add recent activity tracking
-  }
-
-  return { data: stats, error: null }
-}
-
-export const getDisputeStats = async (
-  supabase: SupabaseClient,
-  userId: string
-): Promise<DatabaseResponse<DisputeStats>> => {
-  const { data, error } = await supabase
-    .from('disputes')
-    .select('status, created_at, resolution_date')
-    .eq('user_id', userId)
-
-  if (error) {
-    return { data: null, error: error.message }
-  }
-
-  const stats: DisputeStats = {
-    total: data.length,
-    pending: data.filter(d => d.status === 'pending').length,
-    investigating: data.filter(d => d.status === 'investigating').length,
-    resolved: data.filter(d => d.status === 'resolved').length,
-    rejected: data.filter(d => d.status === 'rejected').length,
-    averageResolutionTime: 0, // TODO: Calculate average resolution time
-  }
-
-  return { data: stats, error: null }
-}
-
-// =============================================
-// DASHBOARD QUERIES
-// =============================================
-
-export const getDashboardData = async (
-  supabase: SupabaseClient,
-  userId: string
-) => {
-  const [
-    profileResponse,
-    progressResponse,
-    recentReportsResponse,
-    activeDisputesResponse,
-    recentDocumentsResponse,
-  ] = await Promise.all([
-    getProfile(supabase, userId),
-    getUserProgress(supabase, userId),
-    getCreditReports(supabase, userId),
-    getDisputes(supabase, userId, { status: 'pending' }),
-    getDocuments(supabase, userId),
-  ])
-
-  return {
-    profile: profileResponse.data,
-    progress: progressResponse.data,
-    recentReports: recentReportsResponse.data?.slice(0, 3) || [],
-    activeDisputes: activeDisputesResponse.data?.slice(0, 5) || [],
-    recentDocuments: recentDocumentsResponse.data?.slice(0, 3) || [],
-    errors: [
-      profileResponse.error,
-      progressResponse.error,
-      recentReportsResponse.error,
-      activeDisputesResponse.error,
-      recentDocumentsResponse.error,
-    ].filter(Boolean),
+    return {
+      recentReports: reportsResult.data || [],
+      activeDisputes: disputesResult.data || [],
+    }
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error)
+    return {
+      recentReports: [],
+      activeDisputes: [],
+    }
   }
 }
 
-// =============================================
-// UTILITY FUNCTIONS
-// =============================================
-
-export const checkUserExists = async (
-  supabase: SupabaseClient,
-  userId: string
-): Promise<boolean> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id')
-    .eq('id', userId)
-    .single()
-
-  return !error && !!data
-}
-
-export const initializeNewUser = async (
+/**
+ * Securely store credit report data with encryption
+ */
+export async function storeCreditReportData(
   supabase: SupabaseClient,
   userId: string,
-  userData: Partial<ProfileInsert>
-): Promise<DatabaseResponse<Profile>> => {
-  const { data, error } = await supabase
-    .from('profiles')
-    .insert({
-      id: userId,
-      full_name: userData.full_name || '',
-      phone: userData.phone || null,
-      subscription_tier: 'free',
-      subscription_status: 'active',
-    })
-    .select()
-    .single()
+  reportData: any,
+  metadata: any
+) {
+  if (!userId) {
+    throw new Error('User ID is required for data storage')
+  }
 
-  return { data, error: error?.message || null }
+  try {
+    // Encrypt sensitive data before storage
+    const encryptedData = DataEncryption.encryptCreditReportData(reportData, userId)
+    
+    // Generate a hash of the user ID for additional security
+    const userHash = DataEncryption.hashIdentifier(userId)
+    
+    const { data, error } = await supabase
+      .from('credit_reports')
+      .insert({
+        user_id: userId,
+        user_hash: userHash,
+        encrypted_data: encryptedData.encryptedData,
+        encryption_iv: encryptedData.iv,
+        encryption_auth_tag: encryptedData.authTag,
+        processing_method: metadata.processingMethod,
+        confidence_score: metadata.confidence,
+        file_name: metadata.fileName,
+        file_size: metadata.fileSize,
+        processing_time: metadata.processingTime,
+        bureau: metadata.bureau || 'experian', // Default bureau if not provided
+        report_date: metadata.reportDate || new Date().toISOString().split('T')[0], // Default to today
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error storing credit report data:', error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Failed to store credit report data:', error)
+    throw error
+  }
+}
+
+/**
+ * Securely retrieve and decrypt credit report data
+ */
+export async function getCreditReportData(
+  supabase: SupabaseClient,
+  userId: string,
+  reportId: string
+) {
+  if (!userId || !reportId) {
+    throw new Error('User ID and Report ID are required')
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('credit_reports')
+      .select(`
+        id,
+        encrypted_data,
+        encryption_iv,
+        encryption_auth_tag,
+        processing_method,
+        confidence_score,
+        created_at
+      `)
+      .eq('user_id', userId)
+      .eq('id', reportId)
+      .single()
+
+    if (error) {
+      console.error('Error retrieving credit report data:', error)
+      throw error
+    }
+
+    if (!data) {
+      throw new Error('Credit report not found or access denied')
+    }
+
+    // Decrypt the data
+    const decryptedData = DataEncryption.decrypt({
+      encryptedData: data.encrypted_data,
+      iv: data.encryption_iv,
+      authTag: data.encryption_auth_tag
+    })
+
+    return {
+      ...data,
+      decryptedData: JSON.parse(decryptedData)
+    }
+  } catch (error) {
+    console.error('Failed to retrieve credit report data:', error)
+    throw error
+  }
+}
+
+/**
+ * Securely delete user data with verification
+ */
+export async function deleteUserData(
+  supabase: SupabaseClient,
+  userId: string,
+  dataType: 'credit_reports' | 'disputes' | 'all'
+) {
+  if (!userId) {
+    throw new Error('User ID is required for data deletion')
+  }
+
+  try {
+    const results = []
+
+    if (dataType === 'credit_reports' || dataType === 'all') {
+      const { error: reportsError } = await supabase
+        .from('credit_reports')
+        .delete()
+        .eq('user_id', userId)
+
+      if (reportsError) {
+        console.error('Error deleting credit reports:', reportsError)
+        throw reportsError
+      }
+      results.push('credit_reports')
+    }
+
+    if (dataType === 'disputes' || dataType === 'all') {
+      const { error: disputesError } = await supabase
+        .from('disputes')
+        .delete()
+        .eq('user_id', userId)
+
+      if (disputesError) {
+        console.error('Error deleting disputes:', disputesError)
+        throw disputesError
+      }
+      results.push('disputes')
+    }
+
+    return { deletedTables: results }
+  } catch (error) {
+    console.error('Failed to delete user data:', error)
+    throw error
+  }
+}
+
+/**
+ * Audit log for security monitoring
+ */
+export async function logSecurityEvent(
+  supabase: SupabaseClient,
+  userId: string,
+  eventType: string,
+  details: any
+) {
+  try {
+    await supabase
+      .from('security_audit_log')
+      .insert({
+        user_id: userId,
+        event_type: eventType,
+        event_details: details,
+        ip_address: details.ipAddress || null,
+        user_agent: details.userAgent || null,
+        timestamp: new Date().toISOString()
+      })
+  } catch (error) {
+    console.error('Failed to log security event:', error)
+    // Don't throw error to avoid breaking main functionality
+  }
+}
+
+/**
+ * Check user data access permissions with optimized query
+ */
+export async function verifyUserAccess(
+  supabase: SupabaseClient,
+  userId: string,
+  resourceId: string,
+  resourceType: 'credit_report' | 'dispute'
+) {
+  if (!userId || !resourceId) {
+    return false
+  }
+
+  try {
+    const tableName = resourceType === 'credit_report' ? 'credit_reports' : 'disputes'
+    
+    // Use EXISTS query for better performance
+    const { data, error } = await supabase
+      .rpc('verify_user_resource_access', {
+        p_user_id: userId,
+        p_resource_id: resourceId,
+        p_table_name: tableName
+      })
+
+    if (error) {
+      // Fallback to direct query if RPC fails
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from(tableName)
+        .select('id')
+        .eq('user_id', userId)
+        .eq('id', resourceId)
+        .single()
+
+      return !fallbackError && !!fallbackData
+    }
+
+    return !!data
+  } catch (error) {
+    console.error('Error verifying user access:', error)
+    return false
+  }
+}
+
+/**
+ * Get user's credit report summary with optimized aggregation
+ */
+export async function getCreditReportSummary(
+  supabase: SupabaseClient,
+  userId: string,
+  timeRange: '7d' | '30d' | '90d' | '1y' = '30d'
+) {
+  if (!userId) {
+    throw new Error('User ID is required')
+  }
+
+  const timeRangeMap = {
+    '7d': 7,
+    '30d': 30,
+    '90d': 90,
+    '1y': 365
+  }
+
+  try {
+    const { data, error } = await supabase
+      .rpc('get_credit_report_summary', {
+        p_user_id: userId,
+        p_days_back: timeRangeMap[timeRange]
+      })
+
+    if (error) {
+      console.error('Error fetching credit report summary:', error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Failed to get credit report summary:', error)
+    throw error
+  }
+}
+
+/**
+ * Get dispute analytics with optimized aggregation
+ */
+export async function getDisputeAnalytics(
+  supabase: SupabaseClient,
+  userId: string,
+  timeRange: '30d' | '90d' | '1y' = '90d'
+) {
+  if (!userId) {
+    throw new Error('User ID is required')
+  }
+
+  const timeRangeMap = {
+    '30d': 30,
+    '90d': 90,
+    '1y': 365
+  }
+
+  try {
+    const { data, error } = await supabase
+      .rpc('get_dispute_analytics', {
+        p_user_id: userId,
+        p_days_back: timeRangeMap[timeRange]
+      })
+
+    if (error) {
+      console.error('Error fetching dispute analytics:', error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Failed to get dispute analytics:', error)
+    throw error
+  }
+}
+
+/**
+ * Batch insert credit report data with optimized performance
+ */
+export async function batchInsertCreditReports(
+  supabase: SupabaseClient,
+  userId: string,
+  reports: Array<{
+    reportData: any
+    metadata: any
+  }>
+) {
+  if (!userId || !reports.length) {
+    throw new Error('User ID and reports are required')
+  }
+
+  try {
+    const insertData = reports.map(({ reportData, metadata }) => {
+      const encryptedData = DataEncryption.encryptCreditReportData(reportData, userId)
+      const userHash = DataEncryption.hashIdentifier(userId)
+
+      return {
+        user_id: userId,
+        user_hash: userHash,
+        encrypted_data: encryptedData.encryptedData,
+        encryption_iv: encryptedData.iv,
+        encryption_auth_tag: encryptedData.authTag,
+        processing_method: metadata.processingMethod,
+        confidence_score: metadata.confidence,
+        file_name: metadata.fileName,
+        file_size: metadata.fileSize,
+        processing_time: metadata.processingTime,
+        bureau: metadata.bureau || 'experian',
+        report_date: metadata.reportDate || new Date().toISOString().split('T')[0],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    })
+
+    const { data, error } = await supabase
+      .from('credit_reports')
+      .insert(insertData)
+      .select()
+
+    if (error) {
+      console.error('Error batch inserting credit reports:', error)
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    console.error('Failed to batch insert credit reports:', error)
+    throw error
+  }
+}
+
+/**
+ * Get paginated credit reports with cursor-based pagination for better performance
+ */
+export async function getPaginatedCreditReports(
+  supabase: SupabaseClient,
+  userId: string,
+  options: {
+    limit?: number
+    cursor?: string
+    status?: string
+    bureau?: string
+    sortBy?: 'created_at' | 'confidence_score' | 'report_date'
+    sortOrder?: 'asc' | 'desc'
+  } = {}
+) {
+  if (!userId) {
+    throw new Error('User ID is required')
+  }
+
+  const {
+    limit = 20,
+    cursor,
+    status,
+    bureau,
+    sortBy = 'created_at',
+    sortOrder = 'desc'
+  } = options
+
+  try {
+    let query = supabase
+      .from('credit_reports')
+      .select(`
+        id,
+        created_at,
+        updated_at,
+        processing_method,
+        confidence_score,
+        status,
+        file_name,
+        bureau,
+        report_date
+      `)
+      .eq('user_id', userId)
+
+    // Add filters
+    if (status) {
+      query = query.eq('status', status)
+    }
+    if (bureau) {
+      query = query.eq('bureau', bureau)
+    }
+
+    // Add cursor-based pagination
+    if (cursor) {
+      const cursorValue = Buffer.from(cursor, 'base64').toString('utf-8')
+      if (sortOrder === 'desc') {
+        query = query.lt(sortBy, cursorValue)
+      } else {
+        query = query.gt(sortBy, cursorValue)
+      }
+    }
+
+    // Add sorting and limit
+    query = query
+      .order(sortBy, { ascending: sortOrder === 'asc' })
+      .limit(limit + 1) // Get one extra to check if there are more results
+
+    const { data, error } = await query
+
+    if (error) {
+      console.error('Error fetching paginated credit reports:', error)
+      throw error
+    }
+
+    const hasMore = data.length > limit
+    const results = hasMore ? data.slice(0, -1) : data
+    const nextCursor = hasMore && results.length > 0
+      ? Buffer.from(results[results.length - 1][sortBy]).toString('base64')
+      : null
+
+    return {
+      data: results,
+      hasMore,
+      nextCursor
+    }
+  } catch (error) {
+    console.error('Failed to get paginated credit reports:', error)
+    throw error
+  }
 }

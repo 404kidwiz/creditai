@@ -1,4 +1,4 @@
-import { creditAnalyzer } from './creditAnalyzer'
+import { CreditAnalyzer } from './creditAnalyzer'
 
 /**
  * Test Gemini AI integration with sample credit report data
@@ -60,10 +60,11 @@ None reported
   try {
     console.log('Testing Gemini AI integration...')
     
+    const creditAnalyzer = new CreditAnalyzer()
     const analysis = await creditAnalyzer.analyzeReport(sampleCreditReportText, 'test-user-id')
     
     console.log('✅ Gemini AI integration successful!')
-    console.log('Credit Score:', analysis.extractedData.creditScore.score)
+    console.log('Credit Score:', analysis.extractedData.creditScores.experian?.score || 'N/A')
     console.log('Negative Items:', analysis.extractedData.negativeItems.length)
     console.log('Recommendations:', analysis.recommendations.length)
     console.log('Summary:', analysis.summary.substring(0, 100) + '...')

@@ -68,6 +68,10 @@
     ".next",
     "out",
     "dist",
-    "build"
+    "build",
+    "eoscar_backup",
+    "monitoring_api_backup",
+    "monitoring_lib_backup",
+    "security_backup"
   ]
 }

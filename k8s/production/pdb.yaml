@@ -1,0 +1,103 @@
+# Pod Disruption Budget for High Availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: creditai-production-pdb
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: creditai
+      environment: production
+
+---
+# Pod Disruption Budget for Blue Deployment
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: creditai-production-blue-pdb
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+    version: blue
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: creditai
+      environment: production
+      version: blue
+
+---
+# Pod Disruption Budget for Green Deployment
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: creditai-production-green-pdb
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+    version: green
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: creditai
+      environment: production
+      version: green
+
+---
+# Network Policy for Production Security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: creditai-production-netpol
+  namespace: creditai-production
+  labels:
+    app: creditai
+    environment: production
+spec:
+  podSelector:
+    matchLabels:
+      app: creditai
+      environment: production
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: creditai-monitoring
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+    - protocol: TCP
+      port: 5432  # PostgreSQL
+    - protocol: TCP
+      port: 6379  # Redis

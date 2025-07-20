@@ -1,0 +1,95 @@
+{
+  "timestamp": "2025-07-18T20:18:09.389Z",
+  "summary": {
+    "totalTests": 17,
+    "passedTests": 17,
+    "failedTests": 0
+  },
+  "results": [
+    {
+      "test": "Script exists: scripts/setup-google-cloud-project.js",
+      "passed": true,
+      "message": "Script found"
+    },
+    {
+      "test": "Script exists: scripts/validate-google-cloud-project.js",
+      "passed": true,
+      "message": "Script found"
+    },
+    {
+      "test": "Script exists: scripts/setup-google-cloud-complete.js",
+      "passed": true,
+      "message": "Script found"
+    },
+    {
+      "test": "Script exists: scripts/diagnose-google-cloud-setup.js",
+      "passed": true,
+      "message": "Script found"
+    },
+    {
+      "test": "Script executable: scripts/setup-google-cloud-project.js",
+      "passed": true,
+      "message": "Executable permissions set"
+    },
+    {
+      "test": "Script executable: scripts/validate-google-cloud-project.js",
+      "passed": true,
+      "message": "Executable permissions set"
+    },
+    {
+      "test": "Script executable: scripts/setup-google-cloud-complete.js",
+      "passed": true,
+      "message": "Executable permissions set"
+    },
+    {
+      "test": "Script executable: scripts/diagnose-google-cloud-setup.js",
+      "passed": true,
+      "message": "Executable permissions set"
+    },
+    {
+      "test": "Script syntax: scripts/setup-google-cloud-project.js",
+      "passed": true,
+      "message": "Valid JavaScript syntax"
+    },
+    {
+      "test": "Script syntax: scripts/validate-google-cloud-project.js",
+      "passed": true,
+      "message": "Valid JavaScript syntax"
+    },
+    {
+      "test": "Script syntax: scripts/setup-google-cloud-complete.js",
+      "passed": true,
+      "message": "Valid JavaScript syntax"
+    },
+    {
+      "test": "Script syntax: scripts/diagnose-google-cloud-setup.js",
+      "passed": true,
+      "message": "Valid JavaScript syntax"
+    },
+    {
+      "test": "Documentation exists: GOOGLE_CLOUD_PROJECT_SETUP.md",
+      "passed": true,
+      "message": "Documentation found"
+    },
+    {
+      "test": "Documentation section: ## Prerequisites",
+      "passed": true,
+      "message": "Section found"
+    },
+    {
+      "test": "Documentation section: ## Quick Start",
+      "passed": true,
+      "message": "Section found"
+    },
+    {
+      "test": "Documentation section: ## Script Details",
+      "passed": true,
+      "message": "Section found"
+    },
+    {
+      "test": "Documentation section: ## Common Issues",
+      "passed": true,
+      "message": "Section found"
+    }
+  ]
+}

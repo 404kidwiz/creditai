@@ -1,0 +1,225 @@
+/* Enhanced UI Responsive Styles */
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Smooth scroll behavior */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Modal animations */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes modalFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95) translateY(20px);
+  }
+}
+
+/* Tab indicator animation */
+@keyframes tabSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Progress ring animation */
+@keyframes progressRing {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Responsive breakpoints */
+@media (max-width: 640px) {
+  /* Mobile styles */
+  
+  /* Reduce padding on mobile */
+  .modal-content {
+    padding: 1rem;
+  }
+  
+  /* Stack elements vertically on mobile */
+  .flex-mobile-column {
+    flex-direction: column;
+  }
+  
+  /* Smaller font sizes on mobile */
+  .text-mobile-sm {
+    font-size: 0.875rem;
+  }
+  
+  /* Full width modals on mobile */
+  .modal-mobile-full {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+  
+  /* Sticky bottom actions on mobile */
+  .actions-mobile-sticky {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    padding: 1rem;
+    z-index: 10;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 768px) {
+  /* Tablet styles */
+  
+  /* Adjust grid columns for tablets */
+  .grid-tablet-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Touch-friendly tap targets */
+@media (hover: none) and (pointer: coarse) {
+  /* Minimum 44x44px tap targets */
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Larger click areas for small icons */
+  .icon-button {
+    padding: 0.75rem;
+  }
+}
+
+/* Dark mode specific styles */
+@media (prefers-color-scheme: dark) {
+  /* Adjust shadows for dark mode */
+  .shadow-dark {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5),
+                0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Print styles */
+@media print {
+  /* Hide interactive elements */
+  button,
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Ensure good contrast */
+  * {
+    color: black !important;
+    background: white !important;
+  }
+  
+  /* Page breaks */
+  .page-break {
+    page-break-after: always;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  /* Stronger borders */
+  .border {
+    border-width: 2px;
+  }
+  
+  /* Higher contrast colors */
+  .text-gray-600 {
+    color: #374151;
+  }
+}
+
+/* Loading skeleton animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 25%,
+    #e5e7eb 50%,
+    #f3f4f6 75%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Custom focus styles */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for interactive elements */
+.interactive {
+  transition: all 0.2s ease-in-out;
+}
+
+.interactive:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1),
+              0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.interactive:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1),
+              0 1px 2px 0 rgba(0, 0, 0, 0.06);
+}

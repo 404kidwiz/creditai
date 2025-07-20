@@ -1,0 +1,511 @@
+/**
+ * Document AI Processor Manager
+ * Manages processor selection, fallback logic, and performance monitoring
+ */
+
+import { DocumentProcessorServiceClient } from '@google-cloud/documentai'
+import { 
+  ProcessorConfig, 
+  ProcessorConfigManager, 
+  ProcessorTestResult,
+  getRecommendedProcessorType,
+  PROCESSOR_TYPE_CONFIGS
+} from './processor-config'
+import { googleCloudConfig } from './config'
+
+export interface ProcessingRequest {
+  filePath?: string
+  fileBuffer?: Buffer
+  mimeType: string
+  fileName?: string
+  documentType?: string
+  preferredProcessor?: string
+}
+
+export interface ProcessingResult {
+  success: boolean
+  extractedText: string
+  confidence: number
+  processorUsed: ProcessorConfig
+  processingTime: number
+  pages: number
+  entities: any[]
+  error?: string
+  fallbackUsed?: boolean
+  metadata?: {
+    fileSize: number
+    mimeType: string
+    documentType?: string
+  }
+}
+
+export interface ProcessorPerformanceMetrics {
+  processorId: string
+  totalRequests: number
+  successfulRequests: number
+  averageProcessingTime: number
+  averageConfidence: number
+  lastUsed: string
+  errorRate: number
+}
+
+export class DocumentAIProcessorManager {
+  private client: DocumentProcessorServiceClient
+  private configManager: ProcessorConfigManager
+  private performanceMetrics: Map<string, ProcessorPerformanceMetrics> = new Map()
+
+  constructor() {
+    this.client = new DocumentProcessorServiceClient({
+      projectId: googleCloudConfig.projectId,
+      keyFile: googleCloudConfig.credentials.keyFile,
+      credentials: googleCloudConfig.credentials.credentials
+    })
+    this.configManager = new ProcessorConfigManager()
+  }
+
+  /**
+   * Initialize the processor manager
+   */
+  async initialize(): Promise<boolean> {
+    try {
+      const config = await this.configManager.loadConfig()
+      if (!config) {
+        console.error('No processor configuration found')
+        return false
+      }
+
+      // Load performance metrics if they exist
+      await this.loadPerformanceMetrics()
+
+      return true
+    } catch (error) {
+      console.error('Error initializing processor manager:', error)
+      return false
+    }
+  }
+
+  /**
+   * Process document with automatic processor selection
+   */
+  async processDocument(request: ProcessingRequest): Promise<ProcessingResult> {
+    const startTime = Date.now()
+    
+    try {
+      // Select optimal processor
+      const processor = await this.selectProcessor(request)
+      if (!processor) {
+        throw new Error('No suitable processor available')
+      }
+
+      // Process document
+      const result = await this.processWithProcessor(processor, request)
+      
+      // Update performance metrics
+      await this.updatePerformanceMetrics(processor.id, {
+        success: result.success,
+        processingTime: result.processingTime,
+        confidence: result.confidence
+      })
+
+      return result
+
+    } catch (error) {
+      // Try fallback processors
+      const fallbackResult = await this.tryFallbackProcessors(request, error.message)
+      
+      if (fallbackResult) {
+        return { ...fallbackResult, fallbackUsed: true }
+      }
+
+      // Return error result
+      return {
+        success: false,
+        extractedText: '',
+        confidence: 0,
+        processorUsed: null as any,
+        processingTime: Date.now() - startTime,
+        pages: 0,
+        entities: [],
+        error: error.message,
+        metadata: {
+          fileSize: request.fileBuffer?.length || 0,
+          mimeType: request.mimeType,
+          documentType: request.documentType
+        }
+      }
+    }
+  }
+
+  /**
+   * Select optimal processor for request
+   */
+  private async selectProcessor(request: ProcessingRequest): Promise<ProcessorConfig | null> {
+    const config = this.configManager.getConfig()
+    if (!config) return null
+
+    // Use preferred processor if specified and available
+    if (request.preferredProcessor) {
+      const processor = this.configManager.getProcessor(request.preferredProcessor)
+      if (processor && processor.state === 'ENABLED') {
+        return processor
+      }
+    }
+
+    // Get file characteristics
+    const fileSize = request.fileBuffer?.length || 0
+    const format = this.extractFormatFromMimeType(request.mimeType)
+
+    // Use configuration manager's selection logic
+    const selectedProcessor = this.configManager.selectProcessorForDocument(
+      request.documentType,
+      fileSize,
+      format
+    )
+
+    if (selectedProcessor) {
+      return selectedProcessor
+    }
+
+    // Fallback to performance-based selection
+    return this.selectByPerformance(request)
+  }
+
+  /**
+   * Select processor based on performance metrics
+   */
+  private selectByPerformance(request: ProcessingRequest): ProcessorConfig | null {
+    const config = this.configManager.getConfig()
+    if (!config) return null
+
+    const availableProcessors = config.processors.filter(p => p.state === 'ENABLED')
+    
+    if (availableProcessors.length === 0) return null
+
+    // Sort by performance score (success rate * confidence - error rate)
+    const scoredProcessors = availableProcessors.map(processor => {
+      const metrics = this.performanceMetrics.get(processor.id)
+      
+      let score = 0.5 // Default score for untested processors
+      
+      if (metrics && metrics.totalRequests > 0) {
+        const successRate = metrics.successfulRequests / metrics.totalRequests
+        const avgConfidence = metrics.averageConfidence || 0.5
+        const errorRate = metrics.errorRate || 0
+        
+        score = (successRate * 0.6) + (avgConfidence * 0.3) - (errorRate * 0.1)
+      }
+      
+      return { processor, score }
+    })
+
+    scoredProcessors.sort((a, b) => b.score - a.score)
+    return scoredProcessors[0].processor
+  }
+
+  /**
+   * Process document with specific processor
+   */
+  private async processWithProcessor(
+    processor: ProcessorConfig, 
+    request: ProcessingRequest
+  ): Promise<ProcessingResult> {
+    const startTime = Date.now()
+
+    try {
+      const processorName = `projects/${googleCloudConfig.projectId}/locations/${googleCloudConfig.location}/processors/${processor.id}`
+
+      // Prepare request
+      const documentRequest = {
+        name: processorName,
+        rawDocument: {
+          content: request.fileBuffer?.toString('base64') || '',
+          mimeType: request.mimeType
+        }
+      }
+
+      // Process document
+      const [response] = await this.client.processDocument(documentRequest)
+      const document = response.document
+
+      if (!document) {
+        throw new Error('No document returned from processor')
+      }
+
+      // Extract results
+      const extractedText = document.text || ''
+      const pages = document.pages || []
+      const entities = document.entities || []
+
+      // Calculate confidence
+      let totalConfidence = 0
+      let confidenceCount = 0
+
+      pages.forEach(page => {
+        if (page.blocks) {
+          page.blocks.forEach(block => {
+            if (block.layout?.confidence) {
+              totalConfidence += block.layout.confidence
+              confidenceCount++
+            }
+          })
+        }
+      })
+
+      const averageConfidence = confidenceCount > 0 ? totalConfidence / confidenceCount : 0
+
+      return {
+        success: true,
+        extractedText,
+        confidence: averageConfidence,
+        processorUsed: processor,
+        processingTime: Date.now() - startTime,
+        pages: pages.length,
+        entities,
+        metadata: {
+          fileSize: request.fileBuffer?.length || 0,
+          mimeType: request.mimeType,
+          documentType: request.documentType
+        }
+      }
+
+    } catch (error) {
+      return {
+        success: false,
+        extractedText: '',
+        confidence: 0,
+        processorUsed: processor,
+        processingTime: Date.now() - startTime,
+        pages: 0,
+        entities: [],
+        error: error.message,
+        metadata: {
+          fileSize: request.fileBuffer?.length || 0,
+          mimeType: request.mimeType,
+          documentType: request.documentType
+        }
+      }
+    }
+  }
+
+  /**
+   * Try fallback processors when primary fails
+   */
+  private async tryFallbackProcessors(
+    request: ProcessingRequest, 
+    primaryError: string
+  ): Promise<ProcessingResult | null> {
+    const config = this.configManager.getConfig()
+    if (!config) return null
+
+    const fallbackProcessors = this.configManager.getProcessorsInFallbackOrder()
+    
+    for (const processor of fallbackProcessors) {
+      if (processor.state !== 'ENABLED') continue
+
+      try {
+        const result = await this.processWithProcessor(processor, request)
+        
+        if (result.success) {
+          // Update performance metrics for fallback success
+          await this.updatePerformanceMetrics(processor.id, {
+            success: true,
+            processingTime: result.processingTime,
+            confidence: result.confidence
+          })
+
+          return result
+        }
+      } catch (error) {
+        // Continue to next fallback processor
+        console.warn(`Fallback processor ${processor.displayName} failed:`, error.message)
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Update performance metrics for a processor
+   */
+  private async updatePerformanceMetrics(
+    processorId: string, 
+    result: { success: boolean; processingTime: number; confidence: number }
+  ): Promise<void> {
+    let metrics = this.performanceMetrics.get(processorId)
+    
+    if (!metrics) {
+      metrics = {
+        processorId,
+        totalRequests: 0,
+        successfulRequests: 0,
+        averageProcessingTime: 0,
+        averageConfidence: 0,
+        lastUsed: new Date().toISOString(),
+        errorRate: 0
+      }
+    }
+
+    // Update metrics
+    metrics.totalRequests++
+    metrics.lastUsed = new Date().toISOString()
+
+    if (result.success) {
+      metrics.successfulRequests++
+      
+      // Update running averages
+      const successCount = metrics.successfulRequests
+      metrics.averageProcessingTime = 
+        ((metrics.averageProcessingTime * (successCount - 1)) + result.processingTime) / successCount
+      metrics.averageConfidence = 
+        ((metrics.averageConfidence * (successCount - 1)) + result.confidence) / successCount
+    }
+
+    metrics.errorRate = 1 - (metrics.successfulRequests / metrics.totalRequests)
+
+    this.performanceMetrics.set(processorId, metrics)
+
+    // Persist metrics periodically
+    if (metrics.totalRequests % 10 === 0) {
+      await this.savePerformanceMetrics()
+    }
+  }
+
+  /**
+   * Get processor performance metrics
+   */
+  getPerformanceMetrics(): ProcessorPerformanceMetrics[] {
+    return Array.from(this.performanceMetrics.values())
+  }
+
+  /**
+   * Get processor statistics
+   */
+  getProcessorStatistics(): {
+    totalProcessors: number
+    enabledProcessors: number
+    totalRequests: number
+    successRate: number
+    averageProcessingTime: number
+  } {
+    const config = this.configManager.getConfig()
+    const metrics = Array.from(this.performanceMetrics.values())
+
+    const totalRequests = metrics.reduce((sum, m) => sum + m.totalRequests, 0)
+    const successfulRequests = metrics.reduce((sum, m) => sum + m.successfulRequests, 0)
+    const totalProcessingTime = metrics.reduce((sum, m) => sum + (m.averageProcessingTime * m.successfulRequests), 0)
+
+    return {
+      totalProcessors: config?.processors.length || 0,
+      enabledProcessors: config?.processors.filter(p => p.state === 'ENABLED').length || 0,
+      totalRequests,
+      successRate: totalRequests > 0 ? successfulRequests / totalRequests : 0,
+      averageProcessingTime: successfulRequests > 0 ? totalProcessingTime / successfulRequests : 0
+    }
+  }
+
+  /**
+   * Test all processors
+   */
+  async testAllProcessors(): Promise<{ [processorId: string]: ProcessorTestResult }> {
+    const config = this.configManager.getConfig()
+    if (!config) return {}
+
+    const results: { [processorId: string]: ProcessorTestResult } = {}
+
+    // Create a simple test document
+    const testDocument = Buffer.from('Test document for processor validation')
+
+    for (const processor of config.processors) {
+      if (processor.state !== 'ENABLED') continue
+
+      try {
+        const result = await this.processWithProcessor(processor, {
+          fileBuffer: testDocument,
+          mimeType: 'text/plain',
+          fileName: 'test.txt',
+          documentType: 'test'
+        })
+
+        results[processor.id] = {
+          success: result.success,
+          textLength: result.extractedText.length,
+          confidence: result.confidence,
+          pages: result.pages,
+          reason: result.error,
+          timestamp: new Date().toISOString()
+        }
+
+        // Update processor test result in config
+        this.configManager.updateProcessorTestResult(processor.id, results[processor.id])
+
+      } catch (error) {
+        results[processor.id] = {
+          success: false,
+          reason: error.message,
+          timestamp: new Date().toISOString()
+        }
+      }
+    }
+
+    return results
+  }
+
+  /**
+   * Extract format from MIME type
+   */
+  private extractFormatFromMimeType(mimeType: string): string {
+    const mimeToFormat: { [key: string]: string } = {
+      'application/pdf': 'PDF',
+      'image/png': 'PNG',
+      'image/jpeg': 'JPEG',
+      'image/jpg': 'JPEG',
+      'image/tiff': 'TIFF',
+      'image/bmp': 'BMP'
+    }
+
+    return mimeToFormat[mimeType] || 'UNKNOWN'
+  }
+
+  /**
+   * Load performance metrics from storage
+   */
+  private async loadPerformanceMetrics(): Promise<void> {
+    try {
+      const fs = await import('fs')
+      const path = await import('path')
+      
+      const metricsPath = path.join(process.cwd(), 'processor-performance-metrics.json')
+      
+      if (fs.existsSync(metricsPath)) {
+        const data = fs.readFileSync(metricsPath, 'utf8')
+        const metrics = JSON.parse(data)
+        
+        for (const [processorId, metric] of Object.entries(metrics)) {
+          this.performanceMetrics.set(processorId, metric as ProcessorPerformanceMetrics)
+        }
+      }
+    } catch (error) {
+      console.warn('Could not load performance metrics:', error.message)
+    }
+  }
+
+  /**
+   * Save performance metrics to storage
+   */
+  private async savePerformanceMetrics(): Promise<void> {
+    try {
+      const fs = await import('fs')
+      const path = await import('path')
+      
+      const metricsPath = path.join(process.cwd(), 'processor-performance-metrics.json')
+      const metricsObject = Object.fromEntries(this.performanceMetrics)
+      
+      fs.writeFileSync(metricsPath, JSON.stringify(metricsObject, null, 2))
+    } catch (error) {
+      console.warn('Could not save performance metrics:', error.message)
+    }
+  }
+}
+
+// Default instance
+export const processorManager = new DocumentAIProcessorManager()

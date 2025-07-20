@@ -2,10 +2,93 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { PROTECTED_ROUTES, PUBLIC_ROUTES, AUTH_ROUTES } from '@/types/auth'
+import { createAPIProtection } from '@/lib/security/apiProtection'
+import { auditLogger, AuditEventType, RiskLevel } from '@/lib/security/auditLogger'
+import crypto from 'crypto'
+
+// Initialize API Protection Middleware
+const apiProtection = createAPIProtection({
+  // Enhanced security for production
+  requireHttps: process.env.NODE_ENV === 'production',
+  enableRateLimiting: true,
+  enableDDoSProtection: true,
+  suspiciousPatternDetection: true,
+  fileUploadProtection: true,
+  maxFileSize: 50 * 1024 * 1024, // 50MB
+  allowedFileTypes: ['.pdf', '.jpg', '.jpeg', '.png', '.txt'],
+  allowedOrigins: [
+    'http://localhost:3000',
+    'https://creditai.com',
+    'https://*.creditai.com'
+  ],
+  corsEnabled: true,
+  securityHeaders: true
+})
+
+// Session management utilities
+const sessionManager = {
+  validateSession: async (session: any) => {
+    if (!session) return { isValid: false, shouldRefresh: false }
+    
+    const now = Date.now()
+    const sessionTime = new Date(session.expires_at || 0).getTime()
+    const timeUntilExpiry = sessionTime - now
+    
+    // Session expired
+    if (timeUntilExpiry <= 0) {
+      return { isValid: false, shouldRefresh: false }
+    }
+    
+    // Session expires within 15 minutes, should refresh
+    if (timeUntilExpiry <= 15 * 60 * 1000) {
+      return { isValid: true, shouldRefresh: true }
+    }
+    
+    return { isValid: true, shouldRefresh: false }
+  },
+  
+  createSession: async (userId: string) => {
+    auditLogger.logEvent(
+      AuditEventType.SESSION_CREATED,
+      { userId },
+      { timestamp: new Date().toISOString() },
+      RiskLevel.LOW
+    )
+    return { success: true }
+  }
+}
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
   const pathname = req.nextUrl.pathname
+  
+  // Apply API Protection Middleware first
+  const protectionResponse = await apiProtection.protect(req)
+  if (protectionResponse) {
+    return protectionResponse
+  }
+  
+  // Initialize response
+  const res = NextResponse.next()
+  
+  // Add request ID for tracking
+  res.headers.set('X-Request-ID', crypto.randomUUID())
+  
+  // Enhanced audit logging for sensitive routes
+  if (pathname.startsWith('/api/') || pathname.startsWith('/dashboard') || pathname.startsWith('/upload')) {
+    auditLogger.logEvent(
+      AuditEventType.API_ACCESS,
+      {
+        ipAddress: req.ip || req.headers.get('x-forwarded-for') || 'unknown',
+        userAgent: req.headers.get('user-agent') || undefined
+      },
+      {
+        path: pathname,
+        method: req.method,
+        timestamp: new Date().toISOString()
+      },
+      RiskLevel.LOW
+    )
+  }
 
   // Create a Supabase client configured to use cookies
   const supabase = createServerClient(
@@ -30,6 +113,38 @@ export async function middleware(req: NextRequest) {
   const {
     data: { session },
   } = await supabase.auth.getSession()
+
+  // Session management and validation
+  if (session) {
+    const sessionValidation = await sessionManager.validateSession(session)
+
+    if (!sessionValidation.isValid) {
+      // Session is invalid, force logout
+      auditLogger.logEvent(
+        AuditEventType.SESSION_TIMEOUT,
+        {
+          userId: session.user.id,
+          ipAddress: req.ip || req.headers.get('x-forwarded-for') || 'unknown',
+          userAgent: req.headers.get('user-agent') || undefined
+        },
+        {
+          sessionId: session.access_token,
+          reason: 'session_invalid'
+        },
+        RiskLevel.MEDIUM
+      )
+
+      // Clear the session and redirect to login
+      const response = NextResponse.redirect(new URL(AUTH_ROUTES.SIGN_IN, req.url))
+      response.cookies.delete('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token')
+      return response
+    }
+
+    // If session needs refresh (approaching timeout), add header
+    if (sessionValidation.shouldRefresh) {
+      res.headers.set('X-Session-Refresh-Needed', 'true')
+    }
+  }
 
   // Check if the current path is protected
   const isProtectedRoute = PROTECTED_ROUTES.some((route) => 
@@ -68,12 +183,23 @@ export async function middleware(req: NextRequest) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
       
       if (error) {
-        console.error('Auth callback error:', error)
+        auditLogger.logEvent(
+          AuditEventType.FAILED_LOGIN,
+          {
+            ipAddress: req.ip || req.headers.get('x-forwarded-for') || 'unknown',
+            userAgent: req.headers.get('user-agent') || undefined
+          },
+          {
+            reason: 'auth_callback_error',
+            error: error.message
+          },
+          RiskLevel.HIGH
+        )
         return NextResponse.redirect(new URL(AUTH_ROUTES.SIGN_IN, req.url))
       }
 
       // Check if user has profile
-      if (data.user) {
+      if (data.user && data.session) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -90,6 +216,9 @@ export async function middleware(req: NextRequest) {
             subscription_status: 'active',
           })
         }
+
+        // Create session in session manager
+        await sessionManager.createSession(data.user.id)
       }
 
       // Redirect to dashboard or specified redirect URL
@@ -145,8 +274,8 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // For all other routes, proceed normally
-  return res
+  // Process response with API protection (adds security headers, etc.)
+  return apiProtection.processResponse(req, res)
 }
 
 export const config = {

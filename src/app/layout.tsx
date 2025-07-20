@@ -1,10 +1,14 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
+import Script from 'next/script'
 
 import { cn } from '@/lib/utils'
 import '@/styles/globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import { AnalyticsProvider } from '@/context/AnalyticsContext'
+import { ThemeProvider } from '@/providers/ThemeProvider'
+import { GlobalKeyboardProvider } from '@/providers/GlobalKeyboardProvider'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -83,15 +87,28 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      </head>
       <body
         className={cn(
           'min-h-screen bg-background font-sans antialiased',
           inter.variable
         )}
       >
-        <AuthProvider>
-          {children}
-          <Toaster
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <GlobalKeyboardProvider>
+            <AuthProvider>
+              <AnalyticsProvider>
+                {children}
+              </AnalyticsProvider>
+            <Toaster
             position="top-right"
             toastOptions={{
               duration: 4000,
@@ -114,8 +131,55 @@ export default function RootLayout({
                 },
               },
             }}
-          />
-        </AuthProvider>
+            />
+            </AuthProvider>
+          </GlobalKeyboardProvider>
+        </ThemeProvider>
+        
+        {/* Performance optimization script */}
+        <Script
+          id="performance-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Initialize performance optimizations
+              if (typeof window !== 'undefined') {
+                window.addEventListener('load', () => {
+                  import('/src/lib/performance/init.js').then(module => {
+                    module.initPerformanceOptimizations();
+                  }).catch(err => {
+                    console.warn('Failed to load performance optimizations:', err);
+                  });
+                });
+              }
+            `,
+          }}
+        />
+        
+        {/* Web Vitals monitoring */}
+        <Script
+          id="web-vitals"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Report Web Vitals
+              if (typeof window !== 'undefined' && 'web-vital' in window) {
+                ['CLS', 'FID', 'FCP', 'LCP', 'TTFB'].forEach(metric => {
+                  window.addEventListener(metric.toLowerCase(), (event) => {
+                    // Send to analytics
+                    if (window.gtag) {
+                      window.gtag('event', metric, {
+                        value: event.detail,
+                        event_category: 'Web Vitals',
+                        event_label: metric,
+                      });
+                    }
+                  });
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   )

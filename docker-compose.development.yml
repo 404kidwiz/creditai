@@ -1,0 +1,142 @@
+# Docker Compose for CreditAI Development Environment
+# Optimized for development workflow with hot reloading
+version: '3.8'
+
+services:
+  # Development Next.js Application
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    image: creditai:dev
+    container_name: creditai-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Node.js debugging port
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - CHOKIDAR_USEPOLLING=true
+    env_file:
+      - .env.local
+      - .env.development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - creditai-dev-network
+    stdin_open: true
+    tty: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development Redis
+  redis-dev:
+    image: redis:7.2-alpine
+    container_name: creditai-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - creditai-dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Development Database (PostgreSQL for local testing)
+  postgres-dev:
+    image: postgres:15-alpine
+    container_name: creditai-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=creditai
+      - POSTGRES_PASSWORD=development_password
+      - POSTGRES_DB=creditai_dev
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - creditai-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U creditai"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Development Monitoring Stack
+  prometheus-dev:
+    image: prom/prometheus:latest
+    container_name: creditai-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-dev-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - creditai-dev-network
+
+  grafana-dev:
+    image: grafana/grafana:latest
+    container_name: creditai-grafana-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=development
+    volumes:
+      - grafana-dev-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - creditai-dev-network
+    depends_on:
+      - prometheus-dev
+
+  # Development Tools
+  mailcatcher:
+    image: schickling/mailcatcher
+    container_name: creditai-mailcatcher
+    restart: unless-stopped
+    ports:
+      - "1080:1080" # Web interface
+      - "1025:1025" # SMTP
+    networks:
+      - creditai-dev-network
+
+# Networks
+networks:
+  creditai-dev-network:
+    driver: bridge
+
+# Volumes
+volumes:
+  redis-dev-data:
+    driver: local
+  postgres-dev-data:
+    driver: local
+  prometheus-dev-data:
+    driver: local
+  grafana-dev-data:
+    driver: local
